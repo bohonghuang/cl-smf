@@ -45,23 +45,7 @@
 
 ;;; Mode message structs — share controller status nibble #xB
 
-(defbinstruct (midi-mode-message (:endian :big)) ()
-  (nil 0 :type (or (satisfies (unsigned-byte 8) (curry #'eql #xB0))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xB1))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xB2))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xB3))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xB4))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xB5))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xB6))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xB7))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xB8))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xB9))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xBA))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xBB))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xBC))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xBD))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xBE))
-                   (satisfies (unsigned-byte 8) (curry #'eql #xBF)))))
+(define-midi-channel-event (midi-mode-message #xB0))
 
 (define-midi-event ((midi-reset-all-controllers-event (:include midi-mode-message)) #x79)
   (value 0 :type (unsigned-byte 8)))
