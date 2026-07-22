@@ -254,7 +254,7 @@
 (defbinstruct midi-meta-event ()
   (nil 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF))))
 
-(defbinstruct (midi-sequence-number-event (:include midi-meta-event)) ()
+(defbinstruct (midi-sequence-number-event (:include midi-meta-event) (:endian :big)) ()
   (nil #x00 :type (satisfies (unsigned-byte 8) (curry #'eql #x00)))
   (len 0 :type vlq-base128-be)
   (ssss 0 :type (unsigned-byte 16)))
@@ -313,7 +313,7 @@
   (nil #x2F :type (satisfies (unsigned-byte 8) (curry #'eql #x2F)))
   (len 0 :type vlq-base128-be))
 
-(defbinstruct (midi-tempo-event (:include midi-meta-event)) ()
+(defbinstruct (midi-tempo-event (:include midi-meta-event) (:endian :big)) ()
   (nil #x51 :type (satisfies (unsigned-byte 8) (curry #'eql #x51)))
   (len 0 :type vlq-base128-be)
   (tttttt 0 :type (unsigned-byte 24)))
