@@ -4,28 +4,6 @@
 
 (in-package #:smf)
 
-(defbinstruct %vlq ()
-  (bytes (make-array 0 :element-type '(unsigned-byte 8))
-         :type (simple-array (satisfies (unsigned-byte 8) (lambda (byte) (plusp (ldb (byte 1 7) byte)))) (*)))
-  (byte 0 :type (unsigned-byte 8)))
-
-(defun %vlq-integer (vlq)
-  (loop :with value :of-type (unsigned-byte 64) := (%vlq-byte vlq)
-        :with bytes := (%vlq-bytes vlq)
-        :for i :of-type (mod 8) :from 1 :to (length bytes)
-        :do (setf (ldb (byte 7 (* i 7)) value) (ldb (byte 7 0) (aref bytes (- (length bytes) i))))
-        :finally (return value)))
-
-(defun integer-%vlq (value)
-  (loop :for v :of-type (unsigned-byte 64) := (ash value -7) :then (ash v -7)
-        :while (plusp v)
-        :collect (logior #x80 (ldb (byte 7 0) v)) :into bytes
-        :finally (return (make-%vlq :bytes (coerce (nreverse bytes) '(simple-array (unsigned-byte 8) (*)))
-                                    :byte (ldb (byte 7 0) value)))))
-
-(defbinstruct (vlq (:type (unsigned-byte 64)) (:constructor progn) (:conc-name nil)) ()
-  (values 0 :type (map %vlq #'%vlq-integer #'integer-%vlq)))
-
 (defbinstruct midi-event ())
 
 (defbinstruct (midi-channel-event (:include midi-event)) ())
@@ -45,16 +23,9 @@
        (nil ,status :type (satisfies (unsigned-byte 8) (curry #'eql ,status)))
        . ,fields)))
 
-(defmacro define-midi-mode-message (name status)
-  `(define-midi-event ((,name (:include midi-mode-message)) ,status)
-     (value 0 :type (unsigned-byte 8))))
-
-(defmacro define-midi-meta-event ((name status) &body fields)
-  `(define-midi-event ((,name (:include midi-meta-event)) ,status)
-     (len 0 :type vlq)
-     ,@fields))
-
-;;; Channel event structs
+;;;;;;;;;;;;;;;;;;;;
+;; Channel events ;;
+;;;;;;;;;;;;;;;;;;;;
 
 (define-midi-channel-event (midi-note-off-event #x80)
   (note 0 :type (unsigned-byte 8))
@@ -82,9 +53,15 @@
   (lsb 0 :type (unsigned-byte 8))
   (msb 0 :type (unsigned-byte 8)))
 
-;;; Mode message structs — share controller status nibble #xB
+;;;;;;;;;;;;;;;;;;;
+;; Mode messages ;;
+;;;;;;;;;;;;;;;;;;;
 
 (define-midi-channel-event (midi-mode-message #xB0))
+
+(defmacro define-midi-mode-message (name status)
+  `(define-midi-event ((,name (:include midi-mode-message)) ,status)
+     (value 0 :type (unsigned-byte 8))))
 
 (define-midi-mode-message midi-reset-all-controllers-event #x79)
 
@@ -100,7 +77,9 @@
 
 (define-midi-mode-message midi-poly-mode-on-event #x7F)
 
-;;; System common message structs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; System common messages ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-midi-event (midi-timing-code-event #xF1)
   (code 0 :type (unsigned-byte 8)))
@@ -114,7 +93,9 @@
 
 (define-midi-event (midi-tune-request-event #xF6))
 
-;;; System real-time message structs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; System real-time messages ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-midi-event (midi-timing-clock-event #xF8))
 
@@ -126,7 +107,35 @@
 
 (define-midi-event (midi-active-sensing-event #xFE))
 
-;;; SysEx event structs
+;;;;;;;;;
+;; VLQ ;;
+;;;;;;;;;
+
+(defbinstruct %vlq ()
+  (bytes (make-array 0 :element-type '(unsigned-byte 8))
+         :type (simple-array (satisfies (unsigned-byte 8) (lambda (byte) (plusp (ldb (byte 1 7) byte)))) (*)))
+  (byte 0 :type (unsigned-byte 8)))
+
+(defun %vlq-integer (vlq)
+  (loop :with value :of-type (unsigned-byte 64) := (%vlq-byte vlq)
+        :with bytes := (%vlq-bytes vlq)
+        :for i :of-type (mod 8) :from 1 :to (length bytes)
+        :do (setf (ldb (byte 7 (* i 7)) value) (ldb (byte 7 0) (aref bytes (- (length bytes) i))))
+        :finally (return value)))
+
+(defun integer-%vlq (value)
+  (loop :for v :of-type (unsigned-byte 64) := (ash value -7) :then (ash v -7)
+        :while (plusp v)
+        :collect (logior #x80 (ldb (byte 7 0) v)) :into bytes
+        :finally (return (make-%vlq :bytes (coerce (nreverse bytes) '(simple-array (unsigned-byte 8) (*)))
+                                    :byte (ldb (byte 7 0) value)))))
+
+(defbinstruct (vlq (:type (unsigned-byte 64)) (:constructor progn) (:conc-name nil)) ()
+  (values 0 :type (map %vlq #'%vlq-integer #'integer-%vlq)))
+
+;;;;;;;;;;;;;;;;;;
+;; SysEx events ;;
+;;;;;;;;;;;;;;;;;;
 
 (define-midi-event (midi-sysex-event #xF0)
   (len 0 :type vlq)
@@ -136,9 +145,16 @@
   (len 0 :type vlq)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
-;;; Meta event structs — fine-grained, :include from midi-meta-event parent
+;;;;;;;;;;;;;;;;;
+;; Meta events ;;
+;;;;;;;;;;;;;;;;;
 
 (define-midi-event ((midi-meta-event (:include midi-event)) #xFF))
+
+(defmacro define-midi-meta-event ((name status) &body fields)
+  `(define-midi-event ((,name (:include midi-meta-event)) ,status)
+     (len 0 :type vlq)
+     ,@fields))
 
 (define-midi-meta-event (midi-sequence-number-event #x00)
   (ssss 0 :type (unsigned-byte 16)))
@@ -169,6 +185,7 @@
 
 (define-midi-meta-event (midi-device-name-event #x09)
   (text "" :type (simple-base-string len)))
+
 (define-midi-meta-event (midi-channel-prefix-event #x20)
   (cc 0 :type (unsigned-byte 8)))
 
@@ -197,45 +214,32 @@
 (define-midi-meta-event (midi-sequencer-specific-event #x7F)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
-;;; Compute all leaf midi-event subclasses for the or union.
-;;; Leaves are subclasses with no direct subclasses of their own.
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun midi-event-classes (&optional (class (find-class 'midi-event)))
     (or (loop :for class :in (c2mop:class-direct-subclasses class)
               :nconc (midi-event-classes class))
         (list class))))
 
-;;; Track event — parametric with position sentinel
-
 (defbinstruct (smf-track-event (:endian :big)) (end)
   (nil 0 :type (satisfies position (rcurry #'< end)))
   (delta 0 :type vlq)
   (event nil :type (or . #.(mapcar #'class-name (midi-event-classes)))))
 
-;;; Track struct — computes end boundary from len-events
-
 (defbinstruct (smf-track (:endian :big)) ()
-  (nil (coerce "MTrk" 'simple-base-string) :type (satisfies (simple-base-string 4)))
+  (nil #.(coerce "MTrk" 'simple-base-string) :type (satisfies (simple-base-string 4)))
   (len-events 0 :type (unsigned-byte 32))
   (track-end 0 :type (map position (curry #'+ len-events)))
   (events (make-array 0 :element-type 'smf-track-event) :type (simple-array (smf-track-event track-end) (*))))
 
-;;; Header struct
-
 (defbinstruct (smf-header (:endian :big)) ()
-  (nil (coerce "MThd" 'simple-base-string) :type (satisfies (simple-base-string 4)))
+  (nil #.(coerce "MThd" 'simple-base-string) :type (satisfies (simple-base-string 4)))
   (nil 6 :type (unsigned-byte 32))
   (format 0 :type (unsigned-byte 16))
   (num-tracks 0 :type (unsigned-byte 16))
   (division 0 :type (signed-byte 16)))
 
-;;; Top-level file struct
-
 (defbinstruct (smf (:endian :big)) ()
   (header (make-smf-header) :type smf-header)
   (tracks (make-array 0 :element-type 'smf-track) :type (simple-array smf-track ((smf-header-num-tracks header)))))
-
-;;; Reader function
 
 (defbinio smf stream)
