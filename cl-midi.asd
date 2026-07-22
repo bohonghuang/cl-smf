@@ -5,8 +5,7 @@
   :description "MIDI file reader/writer for Common Lisp."
   :depends-on (#:binstruct #:closer-mop)
   :serial t
-  :components ((:file "src/vlq")
-               (:file "src/midi"))
+  :components ((:file "src/midi"))
   :in-order-to ((test-op (test-op #:cl-midi/test))))
 
 (defsystem cl-midi/test

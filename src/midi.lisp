@@ -1,5 +1,26 @@
 (in-package #:binstruct)
 
+(defbinstruct %vlq ()
+  (bytes (make-array 0 :element-type '(unsigned-byte 8))
+         :type (simple-array (satisfies (unsigned-byte 8) (lambda (byte) (plusp (ldb (byte 1 7) byte)))) (*)))
+  (byte 0 :type (unsigned-byte 8)))
+
+(defun %read-vlq (vlq)
+  (loop :with value :of-type (unsigned-byte 64) := (%vlq-byte vlq)
+        :with bytes := (%vlq-bytes vlq)
+        :for i :of-type (mod 8) :from 1 :to (length bytes)
+        :do (setf (ldb (byte 7 (* i 7)) value) (ldb (byte 7 0) (aref bytes (- (length bytes) i))))
+        :finally (return value)))
+
+(defun %write-vlq (value)
+  (loop :for v :of-type (unsigned-byte 64) := (ash value -7) :then (ash v -7)
+        :while (plusp v)
+        :collect (logior #x80 (ldb (byte 7 0) v)) :into bytes
+        :finally (return (make-%vlq :bytes (coerce (nreverse bytes) '(simple-array (unsigned-byte 8) (*)))
+                                    :byte (ldb (byte 7 0) value)))))
+
+(defbinstruct (vlq (:type (unsigned-byte 64)) (:constructor progn) (:conc-name nil)) ()
+  (values 0 :type (map %vlq #'%read-vlq #'%write-vlq)))
 (defbinstruct midi-event ())
 
 (defbinstruct (midi-channel-event (:include midi-event)) ())
@@ -101,11 +122,11 @@
 ;;; SysEx event structs
 
 (define-midi-event (midi-sysex-event #xF0)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
 (define-midi-event (midi-authorization-sysex-event #xF7)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
 ;;; Meta event structs — fine-grained, :include from midi-meta-event parent
@@ -113,58 +134,58 @@
 (define-midi-event ((midi-meta-event (:include midi-event)) #xFF))
 
 (define-midi-event ((midi-sequence-number-event (:include midi-meta-event)) #x00)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (ssss 0 :type (unsigned-byte 16)))
 
 (define-midi-event ((midi-text-event (:include midi-meta-event)) #x01)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (text "" :type (simple-base-string len)))
 
 (define-midi-event ((midi-copyright-event (:include midi-meta-event)) #x02)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (text "" :type (simple-base-string len)))
 
 (define-midi-event ((midi-sequence-track-name-event (:include midi-meta-event)) #x03)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (text "" :type (simple-base-string len)))
 
 (define-midi-event ((midi-instrument-name-event (:include midi-meta-event)) #x04)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (text "" :type (simple-base-string len)))
 
 (define-midi-event ((midi-lyric-event (:include midi-meta-event)) #x05)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (text "" :type (simple-base-string len)))
 
 (define-midi-event ((midi-marker-event (:include midi-meta-event)) #x06)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (text "" :type (simple-base-string len)))
 
 (define-midi-event ((midi-cue-point-event (:include midi-meta-event)) #x07)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (text "" :type (simple-base-string len)))
 
 (define-midi-event ((midi-program-name-event (:include midi-meta-event)) #x08)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (text "" :type (simple-base-string len)))
 
 (define-midi-event ((midi-device-name-event (:include midi-meta-event)) #x09)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (text "" :type (simple-base-string len)))
 
 (define-midi-event ((midi-channel-prefix-event (:include midi-meta-event)) #x20)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (cc 0 :type (unsigned-byte 8)))
 
 (define-midi-event ((midi-end-of-track-event (:include midi-meta-event)) #x2F)
-  (len 0 :type vlq-base128-be))
+  (len 0 :type vlq))
 
 (define-midi-event ((midi-tempo-event (:include midi-meta-event)) #x51)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (tttttt 0 :type (unsigned-byte 24)))
 
 (define-midi-event ((midi-smpte-offset-event (:include midi-meta-event)) #x54)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (hr 0 :type (unsigned-byte 8))
   (mn 0 :type (unsigned-byte 8))
   (se 0 :type (unsigned-byte 8))
@@ -172,19 +193,19 @@
   (ff 0 :type (unsigned-byte 8)))
 
 (define-midi-event ((midi-time-signature-event (:include midi-meta-event)) #x58)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (nn 0 :type (unsigned-byte 8))
   (dd 0 :type (unsigned-byte 8))
   (cc 0 :type (unsigned-byte 8))
   (bb 0 :type (unsigned-byte 8)))
 
 (define-midi-event ((midi-key-signature-event (:include midi-meta-event)) #x59)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (sf 0 :type (signed-byte 8))
   (mi 0 :type (unsigned-byte 8)))
 
 (define-midi-event ((midi-sequencer-specific-event (:include midi-meta-event)) #x7F)
-  (len 0 :type vlq-base128-be)
+  (len 0 :type vlq)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
 ;;; Compute all leaf midi-event subclasses for the or union.
@@ -200,7 +221,7 @@
 
 (defbinstruct (midi-track-event (:endian :big)) (end)
   (nil 0 :type (satisfies position (rcurry #'< end)))
-  (delta 0 :type vlq-base128-be)
+  (delta 0 :type vlq)
   (event nil :type (or . #.(mapcar #'class-name (midi-event-classes)))))
 
 ;;; Track struct — computes end boundary from len-events
