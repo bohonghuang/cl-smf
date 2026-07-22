@@ -22,14 +22,23 @@
 
 (defbinstruct (smf-channel-event (:include smf-event)) ())
 
+(declaim (inline smf-status-channel))
+(defun smf-status-channel (status)
+  (ldb (byte 4 0) status))
+
 (defmacro define-smf-channel-event ((name status) &body fields)
-  (let ((struct-name (symbolicate '#:smf-event- name)))
-    `(defbinstruct (,struct-name (:include smf-channel-event) (:endian :big)) ()
-       (channel ,status :type (map (or . ,(loop :for i :from #x00 :to #x0F
-                                                :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i)))))
-                                   (curry #'ldb (byte 4 0))
-                                   (rcurry #'dpb (byte 4 0) ,status)))
-       . ,fields)))
+  (let ((struct-name (symbolicate '#:smf-event- name))
+        (status-channel 'smf-status-channel)
+        (channel-status (symbolicate 'smf-channel-status '/ name)))
+    `(progn
+       (declaim (inline ,channel-status))
+       (defun ,channel-status (channel)
+         (dpb channel (byte 4 0) ,status))
+       (defbinstruct (,struct-name (:include smf-channel-event) (:endian :big)) ()
+         (channel ,status :type (map (or . ,(loop :for i :from #x00 :to #x0F
+                                                  :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i)))))
+                                     #',status-channel #',channel-status))
+         . ,fields))))
 
 (define-smf-channel-event (note-off #x80)
   (note 0 :type (unsigned-byte 8))
@@ -44,7 +53,7 @@
   (pressure 0 :type (unsigned-byte 8)))
 
 (define-smf-channel-event (controller #xB0)
-  (controller 0 :type (unsigned-byte 8))
+  (controller 0 :type (satisfies (unsigned-byte 8) (lambda (byte) (<= #x00 byte #x77))))
   (value 0 :type (unsigned-byte 8)))
 
 (define-smf-channel-event (program-change #xC0)
@@ -64,7 +73,7 @@
 (define-smf-channel-event (mode-message #xB0))
 
 (defmacro define-smf-mode-message (name status)
-  `(define-smf-event ((,name :include smf-event-mode-message) ,status)
+  `(define-smf-event ((,name (:include smf-event-mode-message)) ,status)
      (value 0 :type (unsigned-byte 8))))
 
 (define-smf-mode-message reset-all-controllers #x79)
