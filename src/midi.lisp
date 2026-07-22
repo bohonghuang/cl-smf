@@ -237,87 +237,74 @@
 
 ;;; Meta event structs — fine-grained, :include from empty midi-meta-event parent
 
-(defbinstruct midi-meta-event ())
+(defbinstruct midi-meta-event ()
+  (nil 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF))))
 
 (defbinstruct (midi-sequence-number-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x00 :type (satisfies (unsigned-byte 8) (curry #'eql #x00)))
   (len 0 :type vlq-base128-be)
   (ssss 0 :type (unsigned-byte 16)))
 
 (defbinstruct (midi-text-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x01 :type (satisfies (unsigned-byte 8) (curry #'eql #x01)))
   (len 0 :type vlq-base128-be)
   (text "" :type (simple-base-string len)))
 
 (defbinstruct (midi-copyright-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x02 :type (satisfies (unsigned-byte 8) (curry #'eql #x02)))
   (len 0 :type vlq-base128-be)
   (text "" :type (simple-base-string len)))
 
 (defbinstruct (midi-sequence-track-name-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x03 :type (satisfies (unsigned-byte 8) (curry #'eql #x03)))
   (len 0 :type vlq-base128-be)
   (text "" :type (simple-base-string len)))
 
 (defbinstruct (midi-instrument-name-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x04 :type (satisfies (unsigned-byte 8) (curry #'eql #x04)))
   (len 0 :type vlq-base128-be)
   (text "" :type (simple-base-string len)))
 
 (defbinstruct (midi-lyric-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x05 :type (satisfies (unsigned-byte 8) (curry #'eql #x05)))
   (len 0 :type vlq-base128-be)
   (text "" :type (simple-base-string len)))
 
 (defbinstruct (midi-marker-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x06 :type (satisfies (unsigned-byte 8) (curry #'eql #x06)))
   (len 0 :type vlq-base128-be)
   (text "" :type (simple-base-string len)))
 
 (defbinstruct (midi-cue-point-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x07 :type (satisfies (unsigned-byte 8) (curry #'eql #x07)))
   (len 0 :type vlq-base128-be)
   (text "" :type (simple-base-string len)))
 
 (defbinstruct (midi-program-name-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x08 :type (satisfies (unsigned-byte 8) (curry #'eql #x08)))
   (len 0 :type vlq-base128-be)
   (text "" :type (simple-base-string len)))
 
 (defbinstruct (midi-device-name-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x09 :type (satisfies (unsigned-byte 8) (curry #'eql #x09)))
   (len 0 :type vlq-base128-be)
   (text "" :type (simple-base-string len)))
 
 (defbinstruct (midi-channel-prefix-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x20 :type (satisfies (unsigned-byte 8) (curry #'eql #x20)))
   (len 0 :type vlq-base128-be)
   (cc 0 :type (unsigned-byte 8)))
 
 (defbinstruct (midi-end-of-track-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x2F :type (satisfies (unsigned-byte 8) (curry #'eql #x2F)))
   (len 0 :type vlq-base128-be))
 
 (defbinstruct (midi-tempo-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x51 :type (satisfies (unsigned-byte 8) (curry #'eql #x51)))
   (len 0 :type vlq-base128-be)
   (tttttt 0 :type (unsigned-byte 24)))
 
 (defbinstruct (midi-smpte-offset-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x54 :type (satisfies (unsigned-byte 8) (curry #'eql #x54)))
   (len 0 :type vlq-base128-be)
   (hr 0 :type (unsigned-byte 8))
@@ -327,7 +314,6 @@
   (ff 0 :type (unsigned-byte 8)))
 
 (defbinstruct (midi-time-signature-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x58 :type (satisfies (unsigned-byte 8) (curry #'eql #x58)))
   (len 0 :type vlq-base128-be)
   (nn 0 :type (unsigned-byte 8))
@@ -336,14 +322,12 @@
   (bb 0 :type (unsigned-byte 8)))
 
 (defbinstruct (midi-key-signature-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x59 :type (satisfies (unsigned-byte 8) (curry #'eql #x59)))
   (len 0 :type vlq-base128-be)
   (sf 0 :type (signed-byte 8))
   (mi 0 :type (unsigned-byte 8)))
 
 (defbinstruct (midi-sequencer-specific-event (:include midi-meta-event)) ()
-  (status 0 :type (satisfies (unsigned-byte 8) (curry #'eql #xFF)))
   (nil #x7F :type (satisfies (unsigned-byte 8) (curry #'eql #x7F)))
   (len 0 :type vlq-base128-be)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
