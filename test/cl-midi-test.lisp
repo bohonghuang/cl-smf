@@ -38,3 +38,25 @@
                 (is = 48 (midi-header-division (midi-file-header midi)))
                 (true (plusp (length (midi-file-tracks midi))))
                 (true (plusp (length (midi-track-events (aref (midi-file-tracks midi) 0)))))))))
+
+(define-test midi-file-write :parent suite
+  (loop :for file :in (directory #P"~/.quicklisp/local-projects/cl-midi/test/mid/*.mid")
+        :do (with-open-file (s file :direction :input :element-type '(unsigned-byte 8))
+              (let ((midi (read-midi-file s)))
+                (with-open-file (out #P"/tmp/midi-test.mid" :direction :output
+                                     :element-type '(unsigned-byte 8)
+                                     :if-exists :supersede)
+                  (write-midi-file out midi))
+                (with-open-file (r #P"/tmp/midi-test.mid" :direction :input
+                                   :element-type '(unsigned-byte 8))
+                  (let ((midi2 (read-midi-file r)))
+                    (is = (midi-header-format (midi-file-header midi))
+                         (midi-header-format (midi-file-header midi2)))
+                    (is = (midi-header-division (midi-file-header midi))
+                         (midi-header-division (midi-file-header midi2)))
+                    (is = (length (midi-file-tracks midi))
+                         (length (midi-file-tracks midi2)))
+                    (loop :for track :across (midi-file-tracks midi)
+                          :for track2 :across (midi-file-tracks midi2)
+                          :do (is = (length (midi-track-events track))
+                                   (length (midi-track-events track2))))))))))
