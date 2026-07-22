@@ -1,17 +1,20 @@
 (defpackage cl-smf
   (:use #:cl #:alexandria #:binstruct)
-  (:nicknames #:smf))
+  (:nicknames #:smf)
+  (:export
+   #:read-smf
+   #:write-smf))
 
 (in-package #:smf)
 
 (defbinstruct smf-event ())
 
 (defmacro define-smf-event ((name status) &body fields)
-  (let* ((name-list (ensure-list name))
-         (has-include (some (lambda (opt) (and (consp opt) (find :include (rest opt)))) name-list)))
-    `(defbinstruct (,@name-list ,@(unless has-include '((:include smf-event))) (:endian :big)) ()
-       (nil ,status :type (satisfies (unsigned-byte 8) (curry #'eql ,status)))
-       . ,fields)))
+  (destructuring-bind (name &rest options) (ensure-list name)
+    (let ((name (alexandria:symbolicate '#:smf-event- name)))
+      `(defbinstruct (,name (:endian :big) . ,options) ()
+         (nil ,status :type (satisfies (unsigned-byte 8) (curry #'eql ,status)))
+         . ,fields))))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; Channel events ;;
@@ -20,36 +23,37 @@
 (defbinstruct (smf-channel-event (:include smf-event)) ())
 
 (defmacro define-smf-channel-event ((name status) &body fields)
-  `(defbinstruct (,name (:include smf-channel-event) (:endian :big)) ()
-     (channel ,status :type (map (or . ,(loop :for i :from #x00 :to #x0F
-                                              :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i)))))
-                                 (curry #'ldb (byte 4 0))
-                                 (rcurry #'dpb (byte 4 0) ,status)))
-     . ,fields))
+  (let ((struct-name (symbolicate '#:smf-event- name)))
+    `(defbinstruct (,struct-name (:include smf-channel-event) (:endian :big)) ()
+       (channel ,status :type (map (or . ,(loop :for i :from #x00 :to #x0F
+                                                :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i)))))
+                                   (curry #'ldb (byte 4 0))
+                                   (rcurry #'dpb (byte 4 0) ,status)))
+       . ,fields)))
 
-(define-smf-channel-event (smf-note-off-event #x80)
+(define-smf-channel-event (note-off #x80)
   (note 0 :type (unsigned-byte 8))
   (velocity 0 :type (unsigned-byte 8)))
 
-(define-smf-channel-event (smf-note-on-event #x90)
+(define-smf-channel-event (note-on #x90)
   (note 0 :type (unsigned-byte 8))
   (velocity 0 :type (unsigned-byte 8)))
 
-(define-smf-channel-event (smf-poly-pressure-event #xA0)
+(define-smf-channel-event (poly-pressure #xA0)
   (note 0 :type (unsigned-byte 8))
   (pressure 0 :type (unsigned-byte 8)))
 
-(define-smf-channel-event (smf-controller-event #xB0)
+(define-smf-channel-event (controller #xB0)
   (controller 0 :type (unsigned-byte 8))
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-channel-event (smf-program-change-event #xC0)
+(define-smf-channel-event (program-change #xC0)
   (program 0 :type (unsigned-byte 8)))
 
-(define-smf-channel-event (smf-channel-pressure-event #xD0)
+(define-smf-channel-event (channel-pressure #xD0)
   (pressure 0 :type (unsigned-byte 8)))
 
-(define-smf-channel-event (smf-pitch-bend-event #xE0)
+(define-smf-channel-event (pitch-bend #xE0)
   (lsb 0 :type (unsigned-byte 8))
   (msb 0 :type (unsigned-byte 8)))
 
@@ -57,55 +61,55 @@
 ;; Mode messages ;;
 ;;;;;;;;;;;;;;;;;;;
 
-(define-smf-channel-event (smf-mode-message #xB0))
+(define-smf-channel-event (mode-message #xB0))
 
 (defmacro define-smf-mode-message (name status)
-  `(define-smf-event ((,name (:include smf-mode-message)) ,status)
+  `(define-smf-event ((,name :include smf-event-mode-message) ,status)
      (value 0 :type (unsigned-byte 8))))
 
-(define-smf-mode-message smf-reset-all-controllers-event #x79)
+(define-smf-mode-message reset-all-controllers #x79)
 
-(define-smf-mode-message smf-local-control-event #x7A)
+(define-smf-mode-message local-control #x7A)
 
-(define-smf-mode-message smf-all-notes-off-event #x7B)
+(define-smf-mode-message all-notes-off #x7B)
 
-(define-smf-mode-message smf-omni-mode-off-event #x7C)
+(define-smf-mode-message omni-mode-off #x7C)
 
-(define-smf-mode-message smf-omni-mode-on-event #x7D)
+(define-smf-mode-message omni-mode-on #x7D)
 
-(define-smf-mode-message smf-mono-mode-on-event #x7E)
+(define-smf-mode-message mono-mode-on #x7E)
 
-(define-smf-mode-message smf-poly-mode-on-event #x7F)
+(define-smf-mode-message poly-mode-on #x7F)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; System common messages ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-smf-event (smf-timing-code-event #xF1)
+(define-smf-event (timing-code #xF1)
   (code 0 :type (unsigned-byte 8)))
 
-(define-smf-event (smf-song-position-pointer-event #xF2)
+(define-smf-event (song-position-pointer #xF2)
   (lsb 0 :type (unsigned-byte 8))
   (msb 0 :type (unsigned-byte 8)))
 
-(define-smf-event (smf-song-select-event #xF3)
+(define-smf-event (song-select #xF3)
   (song 0 :type (unsigned-byte 8)))
 
-(define-smf-event (smf-tune-request-event #xF6))
+(define-smf-event (tune-request #xF6))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; System real-time messages ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-smf-event (smf-timing-clock-event #xF8))
+(define-smf-event (timing-clock #xF8))
 
-(define-smf-event (smf-start-sequence-event #xFA))
+(define-smf-event (start-sequence #xFA))
 
-(define-smf-event (smf-continue-sequence-event #xFB))
+(define-smf-event (continue-sequence #xFB))
 
-(define-smf-event (smf-stop-sequence-event #xFC))
+(define-smf-event (stop-sequence #xFC))
 
-(define-smf-event (smf-active-sensing-event #xFE))
+(define-smf-event (active-sensing #xFE))
 
 ;;;;;;;;;
 ;; VLQ ;;
@@ -137,11 +141,11 @@
 ;; SysEx events ;;
 ;;;;;;;;;;;;;;;;;;
 
-(define-smf-event (smf-sysex-event #xF0)
+(define-smf-event (sysex #xF0)
   (len 0 :type vlq)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
-(define-smf-event (smf-authorization-sysex-event #xF7)
+(define-smf-event (authorization-sysex #xF7)
   (len 0 :type vlq)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
@@ -149,69 +153,70 @@
 ;; Meta events ;;
 ;;;;;;;;;;;;;;;;;
 
-(define-smf-event ((smf-meta-event (:include smf-event)) #xFF))
+(defbinstruct (smf-meta-event (:include smf-event) (:endian :big)) ()
+  (nil #xFF :type (satisfies (unsigned-byte 8) (curry #'eql #xFF))))
 
 (defmacro define-smf-meta-event ((name status) &body fields)
   `(define-smf-event ((,name (:include smf-meta-event)) ,status)
      (len 0 :type vlq)
      ,@fields))
 
-(define-smf-meta-event (smf-sequence-number-event #x00)
+(define-smf-meta-event (sequence-number #x00)
   (ssss 0 :type (unsigned-byte 16)))
 
-(define-smf-meta-event (smf-text-event #x01)
+(define-smf-meta-event (text #x01)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (smf-copyright-event #x02)
+(define-smf-meta-event (copyright #x02)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (smf-sequence-track-name-event #x03)
+(define-smf-meta-event (sequence-track-name #x03)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (smf-instrument-name-event #x04)
+(define-smf-meta-event (instrument-name #x04)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (smf-lyric-event #x05)
+(define-smf-meta-event (lyric #x05)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (smf-marker-event #x06)
+(define-smf-meta-event (marker #x06)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (smf-cue-point-event #x07)
+(define-smf-meta-event (cue-point #x07)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (smf-program-name-event #x08)
+(define-smf-meta-event (program-name #x08)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (smf-device-name-event #x09)
+(define-smf-meta-event (device-name #x09)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (smf-channel-prefix-event #x20)
+(define-smf-meta-event (channel-prefix #x20)
   (cc 0 :type (unsigned-byte 8)))
 
-(define-smf-meta-event (smf-end-of-track-event #x2F))
+(define-smf-meta-event (end-of-track #x2F))
 
-(define-smf-meta-event (smf-tempo-event #x51)
+(define-smf-meta-event (tempo #x51)
   (tttttt 0 :type (unsigned-byte 24)))
 
-(define-smf-meta-event (smf-smpte-offset-event #x54)
+(define-smf-meta-event (smpte-offset #x54)
   (hr 0 :type (unsigned-byte 8))
   (mn 0 :type (unsigned-byte 8))
   (se 0 :type (unsigned-byte 8))
   (fr 0 :type (unsigned-byte 8))
   (ff 0 :type (unsigned-byte 8)))
 
-(define-smf-meta-event (smf-time-signature-event #x58)
+(define-smf-meta-event (time-signature #x58)
   (nn 0 :type (unsigned-byte 8))
   (dd 0 :type (unsigned-byte 8))
   (cc 0 :type (unsigned-byte 8))
   (bb 0 :type (unsigned-byte 8)))
 
-(define-smf-meta-event (smf-key-signature-event #x59)
+(define-smf-meta-event (key-signature #x59)
   (sf 0 :type (signed-byte 8))
   (mi 0 :type (unsigned-byte 8)))
 
-(define-smf-meta-event (smf-sequencer-specific-event #x7F)
+(define-smf-meta-event (sequencer-specific #x7F)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -219,6 +224,10 @@
     (or (loop :for class :in (c2mop:class-direct-subclasses class)
               :nconc (smf-event-classes class))
         (list class))))
+
+;;;;;;;;;;;;;;;;
+;; Containers ;;
+;;;;;;;;;;;;;;;;
 
 (defbinstruct (smf-track-event (:endian :big)) (end)
   (nil 0 :type (satisfies position (rcurry #'< end)))
