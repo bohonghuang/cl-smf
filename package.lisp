@@ -45,6 +45,15 @@
        (nil ,status :type (satisfies (unsigned-byte 8) (curry #'eql ,status)))
        . ,fields)))
 
+(defmacro define-midi-mode-message (name status)
+  `(define-midi-event ((,name (:include midi-mode-message)) ,status)
+     (value 0 :type (unsigned-byte 8))))
+
+(defmacro define-midi-meta-event ((name status) &body fields)
+  `(define-midi-event ((,name (:include midi-meta-event)) ,status)
+     (len 0 :type vlq)
+     ,@fields))
+
 ;;; Channel event structs
 
 (define-midi-channel-event (midi-note-off-event #x80)
@@ -77,26 +86,19 @@
 
 (define-midi-channel-event (midi-mode-message #xB0))
 
-(define-midi-event ((midi-reset-all-controllers-event (:include midi-mode-message)) #x79)
-  (value 0 :type (unsigned-byte 8)))
+(define-midi-mode-message midi-reset-all-controllers-event #x79)
 
-(define-midi-event ((midi-local-control-event (:include midi-mode-message)) #x7A)
-  (value 0 :type (unsigned-byte 8)))
+(define-midi-mode-message midi-local-control-event #x7A)
 
-(define-midi-event ((midi-all-notes-off-event (:include midi-mode-message)) #x7B)
-  (value 0 :type (unsigned-byte 8)))
+(define-midi-mode-message midi-all-notes-off-event #x7B)
 
-(define-midi-event ((midi-omni-mode-off-event (:include midi-mode-message)) #x7C)
-  (value 0 :type (unsigned-byte 8)))
+(define-midi-mode-message midi-omni-mode-off-event #x7C)
 
-(define-midi-event ((midi-omni-mode-on-event (:include midi-mode-message)) #x7D)
-  (value 0 :type (unsigned-byte 8)))
+(define-midi-mode-message midi-omni-mode-on-event #x7D)
 
-(define-midi-event ((midi-mono-mode-on-event (:include midi-mode-message)) #x7E)
-  (value 0 :type (unsigned-byte 8)))
+(define-midi-mode-message midi-mono-mode-on-event #x7E)
 
-(define-midi-event ((midi-poly-mode-on-event (:include midi-mode-message)) #x7F)
-  (value 0 :type (unsigned-byte 8)))
+(define-midi-mode-message midi-poly-mode-on-event #x7F)
 
 ;;; System common message structs
 
@@ -138,79 +140,61 @@
 
 (define-midi-event ((midi-meta-event (:include midi-event)) #xFF))
 
-(define-midi-event ((midi-sequence-number-event (:include midi-meta-event)) #x00)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-sequence-number-event #x00)
   (ssss 0 :type (unsigned-byte 16)))
 
-(define-midi-event ((midi-text-event (:include midi-meta-event)) #x01)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-text-event #x01)
   (text "" :type (simple-base-string len)))
 
-(define-midi-event ((midi-copyright-event (:include midi-meta-event)) #x02)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-copyright-event #x02)
   (text "" :type (simple-base-string len)))
 
-(define-midi-event ((midi-sequence-track-name-event (:include midi-meta-event)) #x03)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-sequence-track-name-event #x03)
   (text "" :type (simple-base-string len)))
 
-(define-midi-event ((midi-instrument-name-event (:include midi-meta-event)) #x04)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-instrument-name-event #x04)
   (text "" :type (simple-base-string len)))
 
-(define-midi-event ((midi-lyric-event (:include midi-meta-event)) #x05)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-lyric-event #x05)
   (text "" :type (simple-base-string len)))
 
-(define-midi-event ((midi-marker-event (:include midi-meta-event)) #x06)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-marker-event #x06)
   (text "" :type (simple-base-string len)))
 
-(define-midi-event ((midi-cue-point-event (:include midi-meta-event)) #x07)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-cue-point-event #x07)
   (text "" :type (simple-base-string len)))
 
-(define-midi-event ((midi-program-name-event (:include midi-meta-event)) #x08)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-program-name-event #x08)
   (text "" :type (simple-base-string len)))
 
-(define-midi-event ((midi-device-name-event (:include midi-meta-event)) #x09)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-device-name-event #x09)
   (text "" :type (simple-base-string len)))
-
-(define-midi-event ((midi-channel-prefix-event (:include midi-meta-event)) #x20)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-channel-prefix-event #x20)
   (cc 0 :type (unsigned-byte 8)))
 
-(define-midi-event ((midi-end-of-track-event (:include midi-meta-event)) #x2F)
-  (len 0 :type vlq))
+(define-midi-meta-event (midi-end-of-track-event #x2F))
 
-(define-midi-event ((midi-tempo-event (:include midi-meta-event)) #x51)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-tempo-event #x51)
   (tttttt 0 :type (unsigned-byte 24)))
 
-(define-midi-event ((midi-smpte-offset-event (:include midi-meta-event)) #x54)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-smpte-offset-event #x54)
   (hr 0 :type (unsigned-byte 8))
   (mn 0 :type (unsigned-byte 8))
   (se 0 :type (unsigned-byte 8))
   (fr 0 :type (unsigned-byte 8))
   (ff 0 :type (unsigned-byte 8)))
 
-(define-midi-event ((midi-time-signature-event (:include midi-meta-event)) #x58)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-time-signature-event #x58)
   (nn 0 :type (unsigned-byte 8))
   (dd 0 :type (unsigned-byte 8))
   (cc 0 :type (unsigned-byte 8))
   (bb 0 :type (unsigned-byte 8)))
 
-(define-midi-event ((midi-key-signature-event (:include midi-meta-event)) #x59)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-key-signature-event #x59)
   (sf 0 :type (signed-byte 8))
   (mi 0 :type (unsigned-byte 8)))
 
-(define-midi-event ((midi-sequencer-specific-event (:include midi-meta-event)) #x7F)
-  (len 0 :type vlq)
+(define-midi-meta-event (midi-sequencer-specific-event #x7F)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
 ;;; Compute all leaf midi-event subclasses for the or union.
