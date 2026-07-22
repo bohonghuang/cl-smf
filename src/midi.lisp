@@ -5,14 +5,14 @@
          :type (simple-array (satisfies (unsigned-byte 8) (lambda (byte) (plusp (ldb (byte 1 7) byte)))) (*)))
   (byte 0 :type (unsigned-byte 8)))
 
-(defun %read-vlq (vlq)
+(defun %vlq-integer (vlq)
   (loop :with value :of-type (unsigned-byte 64) := (%vlq-byte vlq)
         :with bytes := (%vlq-bytes vlq)
         :for i :of-type (mod 8) :from 1 :to (length bytes)
         :do (setf (ldb (byte 7 (* i 7)) value) (ldb (byte 7 0) (aref bytes (- (length bytes) i))))
         :finally (return value)))
 
-(defun %write-vlq (value)
+(defun integer-%vlq (value)
   (loop :for v :of-type (unsigned-byte 64) := (ash value -7) :then (ash v -7)
         :while (plusp v)
         :collect (logior #x80 (ldb (byte 7 0) v)) :into bytes
@@ -20,7 +20,8 @@
                                     :byte (ldb (byte 7 0) value)))))
 
 (defbinstruct (vlq (:type (unsigned-byte 64)) (:constructor progn) (:conc-name nil)) ()
-  (values 0 :type (map %vlq #'%read-vlq #'%write-vlq)))
+  (values 0 :type (map %vlq #'%vlq-integer #'integer-%vlq)))
+
 (defbinstruct midi-event ())
 
 (defbinstruct (midi-channel-event (:include midi-event)) ())
