@@ -220,22 +220,22 @@
 
 ;;; Track event — parametric with position sentinel
 
-(defbinstruct (midi-track-event (:endian :big)) (end)
+(defbinstruct (smf-track-event (:endian :big)) (end)
   (nil 0 :type (satisfies position (rcurry #'< end)))
   (delta 0 :type vlq)
   (event nil :type (or . #.(mapcar #'class-name (midi-event-classes)))))
 
 ;;; Track struct — computes end boundary from len-events
 
-(defbinstruct (midi-track (:endian :big)) ()
+(defbinstruct (smf-track (:endian :big)) ()
   (nil (coerce "MTrk" 'simple-base-string) :type (satisfies (simple-base-string 4)))
   (len-events 0 :type (unsigned-byte 32))
   (track-end 0 :type (map position (curry #'+ len-events)))
-  (events (make-array 0 :element-type 'midi-track-event) :type (simple-array (midi-track-event track-end) (*))))
+  (events (make-array 0 :element-type 'smf-track-event) :type (simple-array (smf-track-event track-end) (*))))
 
 ;;; Header struct
 
-(defbinstruct (midi-header (:endian :big)) ()
+(defbinstruct (smf-header (:endian :big)) ()
   (nil (coerce "MThd" 'simple-base-string) :type (satisfies (simple-base-string 4)))
   (nil 6 :type (unsigned-byte 32))
   (format 0 :type (unsigned-byte 16))
@@ -244,10 +244,10 @@
 
 ;;; Top-level file struct
 
-(defbinstruct (midi-file (:endian :big)) ()
-  (header (make-midi-header) :type midi-header)
-  (tracks (make-array 0 :element-type 'midi-track) :type (simple-array midi-track ((midi-header-num-tracks header)))))
+(defbinstruct (smf (:endian :big)) ()
+  (header (make-smf-header) :type smf-header)
+  (tracks (make-array 0 :element-type 'smf-track) :type (simple-array smf-track ((smf-header-num-tracks header)))))
 
 ;;; Reader function
 
-(defbinio midi-file stream)
+(defbinio smf stream)
