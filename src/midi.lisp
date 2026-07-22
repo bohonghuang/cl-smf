@@ -4,35 +4,47 @@
 
 (defbinstruct midi-note-off-event ()
   (status 0 :type (satisfies (unsigned-byte 8) (lambda (b) (eql (ldb (byte 4 4) b) #x8))))
+  (nil 0 :type (unsigned-byte 1))
   (note 0 :type (unsigned-byte 7))
+  (nil 0 :type (unsigned-byte 1))
   (velocity 0 :type (unsigned-byte 7)))
 
 (defbinstruct midi-note-on-event ()
   (status 0 :type (satisfies (unsigned-byte 8) (lambda (b) (eql (ldb (byte 4 4) b) #x9))))
+  (nil 0 :type (unsigned-byte 1))
   (note 0 :type (unsigned-byte 7))
+  (nil 0 :type (unsigned-byte 1))
   (velocity 0 :type (unsigned-byte 7)))
 
 (defbinstruct midi-poly-pressure-event ()
   (status 0 :type (satisfies (unsigned-byte 8) (lambda (b) (eql (ldb (byte 4 4) b) #xA))))
+  (nil 0 :type (unsigned-byte 1))
   (note 0 :type (unsigned-byte 7))
+  (nil 0 :type (unsigned-byte 1))
   (pressure 0 :type (unsigned-byte 7)))
 
 (defbinstruct midi-controller-event ()
   (status 0 :type (satisfies (unsigned-byte 8) (lambda (b) (eql (ldb (byte 4 4) b) #xB))))
+  (nil 0 :type (unsigned-byte 1))
   (controller 0 :type (unsigned-byte 7))
+  (nil 0 :type (unsigned-byte 1))
   (value 0 :type (unsigned-byte 7)))
 
 (defbinstruct midi-program-change-event ()
   (status 0 :type (satisfies (unsigned-byte 8) (lambda (b) (eql (ldb (byte 4 4) b) #xC))))
+  (nil 0 :type (unsigned-byte 1))
   (program 0 :type (unsigned-byte 7)))
 
 (defbinstruct midi-channel-pressure-event ()
   (status 0 :type (satisfies (unsigned-byte 8) (lambda (b) (eql (ldb (byte 4 4) b) #xD))))
+  (nil 0 :type (unsigned-byte 1))
   (pressure 0 :type (unsigned-byte 7)))
 
 (defbinstruct midi-pitch-bend-event ()
   (status 0 :type (satisfies (unsigned-byte 8) (lambda (b) (eql (ldb (byte 4 4) b) #xE))))
+  (nil 0 :type (unsigned-byte 1))
   (lsb 0 :type (unsigned-byte 7))
+  (nil 0 :type (unsigned-byte 1))
   (msb 0 :type (unsigned-byte 7)))
 
 ;;; Meta event type enum + struct
