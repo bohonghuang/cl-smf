@@ -1,13 +1,14 @@
 (defpackage #:cl-smf.test
+  (:use #:cl #:parachute #:parsonic #:binstruct)
   (:import-from #:alexandria #:with-gensyms #:once-only #:rcurry)
-  (:import-from #:binstruct
+  (:import-from #:smf
    #:vlq #:read-smf #:write-smf
    #:smf-header-format #:smf-header-division
-   #:smf-header #:smf-tracks #:smf-track-events
-   #:parser #:parser-run)
-  (:use #:cl #:parachute #:parsonic #:binstruct))
+   #:smf-header #:smf-tracks #:smf-track-events)
+  (:import-from #:binstruct #:parser #:parser-run)
+  (:nicknames #:smf.test))
 
-(in-package #:cl-smf.test)
+(in-package #:smf.test)
 
 (define-test suite)
 
@@ -24,7 +25,7 @@
         :for bytes := (let ((binstruct::*positions* nil))
                         (multiple-value-bind (output vector)
                             (binstruct::vector-emitter-output)
-                          (binstruct::emitter/vlq output value)
+                          (smf::emitter/vlq output value)
                           vector))
         :do (is = value
                  (let ((binstruct::*positions* nil))

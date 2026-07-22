@@ -1,4 +1,8 @@
-(in-package #:binstruct)
+(defpackage cl-smf
+  (:use #:cl #:alexandria #:binstruct)
+  (:nicknames #:smf))
+
+(in-package #:smf)
 
 (defbinstruct %vlq ()
   (bytes (make-array 0 :element-type '(unsigned-byte 8))
