@@ -1,6 +1,8 @@
 (in-package #:binstruct)
 
-(defbinstruct midi-channel-event ())
+(defbinstruct midi-event ())
+
+(defbinstruct (midi-channel-event (:include midi-event)) ())
 
 (defmacro define-midi-channel-event ((name status) &body fields)
   `(defbinstruct (,name (:include midi-channel-event) (:endian :big)) ()
@@ -11,9 +13,11 @@
      . ,fields))
 
 (defmacro define-midi-event ((name status) &body fields)
-  `(defbinstruct (,@(ensure-list name) (:endian :big)) ()
-     (nil ,status :type (satisfies (unsigned-byte 8) (curry #'eql ,status)))
-     . ,fields))
+  (let* ((name-list (ensure-list name))
+         (has-include (some (lambda (opt) (and (consp opt) (find :include (rest opt)))) name-list)))
+    `(defbinstruct (,@name-list ,@(unless has-include '((:include midi-event))) (:endian :big)) ()
+       (nil ,status :type (satisfies (unsigned-byte 8) (curry #'eql ,status)))
+       . ,fields)))
 
 ;;; Channel event structs
 
@@ -106,7 +110,7 @@
 
 ;;; Meta event structs — fine-grained, :include from midi-meta-event parent
 
-(define-midi-event (midi-meta-event #xFF))
+(define-midi-event ((midi-meta-event (:include midi-event)) #xFF))
 
 (define-midi-event ((midi-sequence-number-event (:include midi-meta-event)) #x00)
   (len 0 :type vlq-base128-be)
@@ -183,30 +187,26 @@
   (len 0 :type vlq-base128-be)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
+;;; Compute all leaf midi-event subclasses for the or union.
+;;; Leaves are subclasses with no direct subclasses of their own.
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun midi-event-leaves ()
+    (let ((root (find-class 'midi-event)))
+      (labels ((all-subclasses (class)
+                 (loop for sub in (sb-mop:class-direct-subclasses class)
+                       nconc (cons sub (all-subclasses sub))))
+               (leafp (class)
+                 (null (sb-mop:class-direct-subclasses class))))
+        (mapcar #'class-name
+                (remove-if-not #'leafp (all-subclasses root)))))))
+
 ;;; Track event — parametric with position sentinel
 
 (defbinstruct (midi-track-event (:endian :big)) (end)
   (nil 0 :type (satisfies position (rcurry #'< end)))
   (delta 0 :type vlq-base128-be)
-  (event nil :type (or midi-note-off-event midi-note-on-event midi-poly-pressure-event
-                       midi-reset-all-controllers-event midi-local-control-event
-                       midi-all-notes-off-event midi-omni-mode-off-event
-                       midi-omni-mode-on-event midi-mono-mode-on-event midi-poly-mode-on-event
-                       midi-controller-event
-                       midi-program-change-event midi-channel-pressure-event midi-pitch-bend-event
-                       midi-timing-code-event midi-song-position-pointer-event midi-song-select-event
-                       midi-tune-request-event
-                       midi-timing-clock-event midi-start-sequence-event
-                       midi-continue-sequence-event midi-stop-sequence-event midi-active-sensing-event
-                       midi-sysex-event midi-authorization-sysex-event
-                       midi-sequence-number-event
-                       midi-copyright-event midi-sequence-track-name-event
-                       midi-instrument-name-event midi-lyric-event midi-marker-event
-                       midi-cue-point-event midi-program-name-event midi-device-name-event
-                       midi-text-event
-                       midi-channel-prefix-event midi-end-of-track-event midi-tempo-event
-                       midi-smpte-offset-event midi-time-signature-event midi-key-signature-event
-                       midi-sequencer-specific-event)))
+  (event nil :type (or . #.(midi-event-leaves))))
 
 ;;; Track struct — computes end boundary from len-events
 
