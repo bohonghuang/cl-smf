@@ -191,22 +191,17 @@
 ;;; Leaves are subclasses with no direct subclasses of their own.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun midi-event-leaves ()
-    (let ((root (find-class 'midi-event)))
-      (labels ((all-subclasses (class)
-                 (loop for sub in (sb-mop:class-direct-subclasses class)
-                       nconc (cons sub (all-subclasses sub))))
-               (leafp (class)
-                 (null (sb-mop:class-direct-subclasses class))))
-        (mapcar #'class-name
-                (remove-if-not #'leafp (all-subclasses root)))))))
+  (defun midi-event-classes (&optional (class (find-class 'midi-event)))
+    (or (loop :for class :in (c2mop:class-direct-subclasses class)
+              :nconc (midi-event-classes class))
+        (list class))))
 
 ;;; Track event — parametric with position sentinel
 
 (defbinstruct (midi-track-event (:endian :big)) (end)
   (nil 0 :type (satisfies position (rcurry #'< end)))
   (delta 0 :type vlq-base128-be)
-  (event nil :type (or . #.(midi-event-leaves))))
+  (event nil :type (or . #.(mapcar #'class-name (midi-event-classes)))))
 
 ;;; Track struct — computes end boundary from len-events
 
