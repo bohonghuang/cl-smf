@@ -17,28 +17,44 @@
          . ,fields))))
 
 ;;;;;;;;;;;;;;;;;;;;
+;; Running status ;;
+;;;;;;;;;;;;;;;;;;;;
+
+(declaim (type (unsigned-byte 8) *smf-running-status*))
+(defvar *smf-running-status*)
+
+(defbinstruct (smf-running-status (:type (unsigned-byte 8)) (:constructor progn) (:conc-name nil)) (expected)
+  (values 0 :type (satisfies
+                   (map (binstruct::peek (unsigned-byte 8))
+                        (the (function (t) (unsigned-byte 8))
+                             (lambda (byte) (if (< byte #x80) *smf-running-status* 0)))
+                        (constantly #.(make-array 0 :element-type '(unsigned-byte 8))))
+                   (lambda (status) (= (ldb (byte 4 4) status) (ldb (byte 4 4) (the (unsigned-byte 8) expected)))))))
+
+;;;;;;;;;;;;;;;;;;;;
 ;; Channel events ;;
 ;;;;;;;;;;;;;;;;;;;;
 
 (defbinstruct (smf-channel-event (:include smf-event)) ())
 
-(declaim (inline smf-status-channel))
+(declaim (ftype (function ((unsigned-byte 8)) (values (unsigned-byte 4))) smf-status-channel))
 (defun smf-status-channel (status)
-  (ldb (byte 4 0) status))
+  (assert (ldb (byte 4 4) status))
+  (ldb (byte 4 0) (setf *smf-running-status* status)))
 
 (defmacro define-smf-channel-event ((name status) &body fields)
   (let ((struct-name (symbolicate '#:smf-event- name))
         (status-channel 'smf-status-channel)
         (channel-status (symbolicate 'smf-channel-status '/ name)))
     `(progn
-       (declaim (inline ,channel-status))
        (defun ,channel-status (channel)
          (dpb channel (byte 4 0) ,status))
        (defbinstruct (,struct-name (:include smf-channel-event) (:endian :big)) ()
-         (channel ,status :type (map (or . ,(loop :for i :from #x00 :to #x0F
-                                                  :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i)))))
-                                     (the (function ((unsigned-byte 8)) (unsigned-byte 4)) #',status-channel)
-                                     (the (function ((unsigned-byte 4)) (unsigned-byte 8)) #',channel-status)))
+         (channel 0 :type (map (or ,@(loop :for i :from #x00 :to #x0F
+                                           :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i))))
+                                   (smf-running-status ,status))
+                               (the (function ((unsigned-byte 8)) (unsigned-byte 4)) #',status-channel)
+                               (the (function ((unsigned-byte 4)) (unsigned-byte 8)) #',channel-status)))
          . ,fields))))
 
 (define-smf-channel-event (note-off #x80)
@@ -264,4 +280,4 @@
   (header (make-smf-header) :type smf-header)
   (tracks (make-array 0 :element-type 'smf-track) :type (simple-array smf-track ((smf-header-num-tracks header)))))
 
-(defbinio smf stream)
+(defbinio (smf &aux (*smf-running-status* 0)) stream)
