@@ -37,7 +37,8 @@
        (defbinstruct (,struct-name (:include smf-channel-event) (:endian :big)) ()
          (channel ,status :type (map (or . ,(loop :for i :from #x00 :to #x0F
                                                   :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i)))))
-                                     #',status-channel #',channel-status))
+                                     (the (function ((unsigned-byte 8)) (unsigned-byte 4)) #',status-channel)
+                                     (the (function ((unsigned-byte 4)) (unsigned-byte 8)) #',channel-status)))
          . ,fields))))
 
 (define-smf-channel-event (note-off #x80)
