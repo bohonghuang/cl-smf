@@ -124,12 +124,15 @@
 ;; VLQ ;;
 ;;;;;;;;;
 
+(declaim (inline make-%vlq))
 (defbinstruct %vlq ()
-  (bytes (make-array 0 :element-type '(unsigned-byte 8))
+  (bytes #.(make-array 0 :element-type '(unsigned-byte 8))
          :type (simple-array (satisfies (unsigned-byte 8) (lambda (byte) (plusp (ldb (byte 1 7) byte)))) (*)))
   (byte 0 :type (unsigned-byte 8)))
 
+(declaim (inline %vlq-integer))
 (defun %vlq-integer (vlq)
+  (declare (dynamic-extent vlq))
   (loop :with value :of-type (unsigned-byte 64) := (%vlq-byte vlq)
         :with bytes := (%vlq-bytes vlq)
         :for i :of-type (mod 8) :from 1 :to (length bytes)
