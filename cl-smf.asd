@@ -9,7 +9,7 @@
   :in-order-to ((test-op (test-op #:cl-smf/test))))
 
 (defsystem cl-smf/test
-  :depends-on (#:cl-smf #:parachute)
+  :depends-on (#:cl-smf #:parachute #:flexi-streams)
   :pathname "test/"
   :components ((:file "package"))
   :perform (test-op (op c) (symbol-call '#:parachute '#:test (find-symbol (symbol-name '#:suite) '#:smf.test))))

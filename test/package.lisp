@@ -6,6 +6,10 @@
    #:smf-header-format #:smf-header-division
    #:smf-header #:smf-tracks #:smf-track-events)
   (:import-from #:binstruct #:parser #:parser-run)
+  (:import-from #:flexi-streams
+   #:make-in-memory-input-stream
+   #:make-in-memory-output-stream
+   #:get-output-stream-sequence)
   (:nicknames #:smf.test))
 
 (in-package #:smf.test)
@@ -50,53 +54,33 @@
        #xC0 #x00 #x00 #x90 #x3C #x64 #x30 #x80 #x3C #x00 #x00 #xFF #x01 #x05 #x68 #x65
        #x6C #x6C #x6F #x00 #xFF #x2F #x00))))
 
-(defun smf-from-bytes (bytes)
-  "Write BYTES to a fresh temporary file and return its pathname."
-  (let ((path (merge-pathnames (make-pathname :name (format nil "cl-smf-test-~A" (random most-positive-fixnum))
-                                              :type "mid")
-                               #P"/tmp/")))
-    (with-open-file (out path :direction :output :element-type '(unsigned-byte 8)
-                                 :if-exists :supersede)
-      (write-sequence bytes out))
-    path))
+(defun smf-input-stream ()
+  "Return an in-memory binary input stream over the embedded SMF bytes."
+  (make-in-memory-input-stream *smf-bytes*))
 
 (define-test smf-read :parent suite
-  (let ((path (smf-from-bytes *smf-bytes*)))
-    (unwind-protect
-         (with-open-file (s path :direction :input :element-type '(unsigned-byte 8))
-           (let ((smf (read-smf s)))
-             (is = 1 (smf-header-format (smf-header smf)))
-             (is = 48 (smf-header-division (smf-header smf)))
-             (is = 2 (length (smf-tracks smf)))
-             (true (plusp (length (smf-track-events (aref (smf-tracks smf) 0))))
-                  "track 0 should have events")
-             (true (plusp (length (smf-track-events (aref (smf-tracks smf) 1))))
-                  "track 1 should have events")))
-      (delete-file path))))
+  (let ((smf (read-smf (smf-input-stream))))
+    (is = 1 (smf-header-format (smf-header smf)))
+    (is = 48 (smf-header-division (smf-header smf)))
+    (is = 2 (length (smf-tracks smf)))
+    (true (plusp (length (smf-track-events (aref (smf-tracks smf) 0))))
+         "track 0 should have events")
+    (true (plusp (length (smf-track-events (aref (smf-tracks smf) 1))))
+         "track 1 should have events")))
 
 (define-test smf-write :parent suite
-  (let ((path (smf-from-bytes *smf-bytes*)))
-    (unwind-protect
-         (let ((smf (with-open-file (s path :direction :input :element-type '(unsigned-byte 8))
-                      (read-smf s))))
-           (let ((out-path (merge-pathnames (make-pathname :name (format nil "cl-smf-test-out-~A" (random most-positive-fixnum))
-                                                         :type "mid")
-                                              #P"/tmp/")))
-             (with-open-file (out out-path :direction :output :element-type '(unsigned-byte 8)
-                                          :if-exists :supersede)
-               (write-smf out smf))
-             (unwind-protect
-                  (with-open-file (r out-path :direction :input :element-type '(unsigned-byte 8))
-                    (let ((smf2 (read-smf r)))
-                      (is = (smf-header-format (smf-header smf))
-                           (smf-header-format (smf-header smf2)))
-                      (is = (smf-header-division (smf-header smf))
-                           (smf-header-division (smf-header smf2)))
-                      (is = (length (smf-tracks smf))
-                           (length (smf-tracks smf2)))
-                      (loop :for track :across (smf-tracks smf)
-                            :for track2 :across (smf-tracks smf2)
-                            :do (is = (length (smf-track-events track))
-                                     (length (smf-track-events track2))))))
-               (when (probe-file out-path) (delete-file out-path)))))
-      (delete-file path))))
+  (let* ((smf (read-smf (smf-input-stream)))
+         (out-stream (make-in-memory-output-stream))
+         (result-stream (write-smf out-stream smf))
+         (out-bytes (get-output-stream-sequence result-stream)))
+    (let ((smf2 (read-smf (make-in-memory-input-stream out-bytes))))
+      (is = (smf-header-format (smf-header smf))
+           (smf-header-format (smf-header smf2)))
+      (is = (smf-header-division (smf-header smf))
+           (smf-header-division (smf-header smf2)))
+      (is = (length (smf-tracks smf))
+           (length (smf-tracks smf2)))
+      (loop :for track :across (smf-tracks smf)
+            :for track2 :across (smf-tracks smf2)
+            :do (is = (length (smf-track-events track))
+                     (length (smf-track-events track2)))))))
