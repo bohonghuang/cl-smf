@@ -28,7 +28,7 @@
                    (map (binstruct::peek (unsigned-byte 8))
                         (the (function (t) (unsigned-byte 8))
                              (lambda (byte) (if (< byte #x80) *smf-running-status* 0)))
-                        (constantly #.(make-array 0 :element-type '(unsigned-byte 8))))
+                        (constantly 0))
                    (lambda (status) (= (ldb (byte 4 4) status) (ldb (byte 4 4) (the (unsigned-byte 8) expected)))))))
 
 ;;;;;;;;;;;;;;;;;;;;
@@ -261,7 +261,7 @@
 (defbinstruct (smf-track-event (:endian :big)) (end)
   (nil 0 :type (satisfies position (rcurry #'< end)))
   (delta 0 :type vlq)
-  (event nil :type (or . #.(mapcar #'class-name (smf-event-classes)))))
+  (event (make-smf-event-all-notes-off) :type (or . #.(mapcar #'class-name (smf-event-classes)))))
 
 (defbinstruct (smf-track (:endian :big)) ()
   (nil #.(coerce "MTrk" 'simple-base-string) :type (satisfies (simple-base-string 4)))
