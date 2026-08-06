@@ -76,7 +76,7 @@
 (define-smf-channel-event (control-change #xB0))
 
 (defmacro define-smf-control-event ((name status) &body fields)
-  (let* ((struct (symbolicate '#:smf-control-event- name))
+  (let* ((struct (if (stringp name) (intern name) (symbolicate '#:smf-control-event- name)))
          (status-list (ensure-list status)))
     (destructuring-bind (&optional status-field (reader '#'identity) (writer '#'identity))
         (ensure-list (typecase (car status-list)
@@ -87,6 +87,9 @@
         `(defbinstruct (,struct (:include smf-event-control-change) (:endian :big)) ()
            (,status-field 0 :type (map ,type (the (function ((unsigned-byte 8)) (unsigned-byte 8)) ,reader) ,writer))
            ,@fields)))))
+
+(defmacro define-smf-mode-message ((name status) &body fields)
+  `(define-smf-control-event (,(format nil "~A~A" '#:smf-mode-message- name) ,status) . ,fields))
 
 (define-smf-control-event (bank-select/msb #x00)
   (value 0 :type (unsigned-byte 8)))
@@ -276,23 +279,23 @@
 
 ;; #x66--#x77 undefined
 
-(define-smf-control-event (all-sound-off #x78))
+(define-smf-mode-message (all-sound-off #x78))
 
-(define-smf-control-event (reset-all-controllers #x79))
+(define-smf-mode-message (reset-all-controllers #x79))
 
-(define-smf-control-event (local-on-off #x7A)
+(define-smf-mode-message (local-on-off #x7A)
+  (switch 0 :type (boolean (unsigned-byte 8))))
+
+(define-smf-mode-message (all-notes-off #x7B))
+
+(define-smf-mode-message (omni-mode-off #x7C))
+
+(define-smf-mode-message (omni-mode-on #x7D))
+
+(define-smf-mode-message (mono-mode #x7E)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (all-notes-off #x7B))
-
-(define-smf-control-event (omni-mode-off #x7C))
-
-(define-smf-control-event (omni-mode-on #x7D))
-
-(define-smf-control-event (mono-mode #x7E)
-  (value 0 :type (unsigned-byte 8)))
-
-(define-smf-control-event (poly-mode #x7F))
+(define-smf-mode-message (poly-mode #x7F))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; System common messages ;;
