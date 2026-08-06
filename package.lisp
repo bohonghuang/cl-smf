@@ -3,8 +3,8 @@
   (:shadow #:copy-file)
   (:nicknames #:smf)
   (:export
-   #:read-smf
-   #:write-smf))
+   #:read-file
+   #:write-file))
 
 (in-package #:smf)
 
@@ -78,16 +78,24 @@
 
 (defmacro define-control-event ((name status) &body fields)
   (let* ((struct (if (stringp name) (intern name) (symbolicate '#:control-event- name)))
-         (status-list (ensure-list status)))
-    (destructuring-bind (&optional status-field (reader '#'identity) (writer '#'identity))
-        (ensure-list (typecase (car status-list)
-                       ((or cons symbol) (pop status-list))))
-      (let ((type `(or . ,(loop :for status :in status-list
-                                :collect `(satisfies (unsigned-byte 8) (curry #'eql ,status)))))
-            (fields (or fields '((nil 0 :type (unsigned-byte 8))))))
-        `(defbinstruct (,struct (:include event-control-change) (:endian :big)) ()
-           (,status-field 0 :type (map ,type (the (function ((unsigned-byte 8)) (unsigned-byte 8)) ,reader) ,writer))
-           ,@fields)))))
+         (status-list (ensure-list status))
+         (status-field (typecase (car status-list)
+                         (symbol (pop status-list))
+                         (t (when (> (length status-list) 1) 'id))))
+         (status-mapping (loop :for (status id) :in (mapcar #'ensure-list status-list)
+                               :for i :from 1
+                               :collect `(,status ,(or id i))))
+         (type `(or . ,(loop :for (status) :in status-mapping
+                             :collect `(satisfies (unsigned-byte 8) (curry #'eql ,status)))))
+         (fields (or fields '((nil 0 :type (unsigned-byte 8))))))
+    `(defbinstruct (,struct (:include event-control-change) (:endian :big)) ()
+       (,status-field 0 :type ,(if status-field
+                                   (with-gensyms (arg)
+                                     `(map ,type (the (function ((unsigned-byte 8)) (unsigned-byte 8))
+                                                      (lambda (,arg) (ecase ,arg . ,status-mapping)))
+                                           (lambda (,arg) (ecase ,arg . ,(reverse status-mapping)))))
+                                   type))
+       ,@fields)))
 
 (defmacro define-mode-message ((name status) &body fields)
   `(define-control-event (,(format nil "~A~A" '#:mode-message- name) ,status) . ,fields))
@@ -127,38 +135,10 @@
 (define-control-event (expression/msb #x0B)
   (value 0 :type (unsigned-byte 8)))
 
-(define-control-event
-    (effect-controller/msb
-     ((id (lambda (status)
-            (ecase status
-              (#x0C 1)
-              (#x0D 2)
-              (#x2C 3)
-              (#x2D 4)))
-          (lambda (id)
-            (ecase id
-              (1 #x0C)
-              (2 #x0D)
-              (3 #x2C)
-              (4 #x2D))))
-      #x0C #x0D #x2C #x2D))
+(define-control-event (effect-controller/msb (#x0C #x0D #x2C #x2D))
   (value 0 :type (unsigned-byte 8)))
 
-(define-control-event
-    (general-purpose/msb
-     ((id (lambda (status)
-            (ecase status
-              (#x10 1)
-              (#x11 2)
-              (#x12 3)
-              (#x13 4)))
-          (lambda (id)
-            (ecase id
-              (1 #x10)
-              (2 #x11)
-              (3 #x12)
-              (4 #x13))))
-      #x10 #x11 #x12 #x13))
+(define-control-event (general-purpose/msb (#x10 #x11 #x12 #x13))
   (value 0 :type (unsigned-byte 8)))
 
 (define-control-event (bank-select/lsb #x20)
@@ -195,69 +175,16 @@
 (define-control-event (expression/lsb #x2B)
   (value 0 :type (unsigned-byte 8)))
 
-(define-control-event
-    (effect-controller/lsb
-     ((id (lambda (status)
-            (ecase status
-              (#x2C 1)
-              (#x2D 2)
-              (#x4C 3)
-              (#x4D 4)))
-          (lambda (id)
-            (ecase id
-              (1 #x2C)
-              (2 #x2D)
-              (3 #x4C)
-              (4 #x4D))))
-      #x2C #x2D #x4C #x4D))
+(define-control-event (effect-controller/lsb (#x2C #x2D #x4C #x4D))
   (value 0 :type (unsigned-byte 8)))
 
-(define-control-event
-    (general-purpose/lsb
-     ((id (lambda (status)
-            (ecase status
-              (#x30 1)
-              (#x31 2)
-              (#x32 3)
-              (#x33 4)))
-          (lambda (id)
-            (ecase id
-              (1 #x30)
-              (2 #x31)
-              (3 #x32)
-              (4 #x33))))
-      #x30 #x31 #x32 #x33))
+(define-control-event (general-purpose/lsb (#x30 #x31 #x32 #x33))
   (value 0 :type (unsigned-byte 8)))
 
-(define-control-event (sound-controller
-                       ((id (lambda (status)
-                              (ecase status
-                                (#x46 1) (#x47 2) (#x48 3) (#x49 4) (#x4A 5)
-                                (#x4B 6) (#x4C 7) (#x4D 8) (#x4E 9) (#x4F 10)))
-                            (lambda (id)
-                              (ecase id
-                                (1 #x46) (2 #x47) (3 #x48) (4 #x49) (5 #x4A)
-                                (6 #x4B) (7 #x4C) (8 #x4D) (9 #x4E) (10 #x4F))))
-                        #x46 #x47 #x48 #x49 #x4A #x4B #x4C #x4D #x4E #x4F))
+(define-control-event (sound-controller (#x46 #x47 #x48 #x49 #x4A #x4B #x4C #x4D #x4E #x4F))
   (value 0 :type (unsigned-byte 8)))
 
-(define-control-event
-    (effect-depth
-     ((id (lambda (status)
-            (ecase status
-              (#x5B 1)
-              (#x5C 2)
-              (#x5D 3)
-              (#x5E 4)
-              (#x5F 5)))
-          (lambda (id)
-            (ecase id
-              (1 #x5B)
-              (2 #x5C)
-              (3 #x5D)
-              (4 #x5E)
-              (5 #x5F))))
-      #x5B #x5C #x5D #x5E #x5F))
+(define-control-event (effect-depth (#x5B #x5C #x5D #x5E #x5F))
   (value 0 :type (unsigned-byte 8)))
 
 (define-control-event (data-increment #x60)
@@ -285,7 +212,7 @@
 (define-mode-message (reset-all-controllers #x79))
 
 (define-mode-message (local-on-off #x7A)
-  (switch 0 :type (boolean (unsigned-byte 8))))
+  (value 0 :type (boolean (unsigned-byte 8))))
 
 (define-mode-message (all-notes-off #x7B))
 
