@@ -436,10 +436,12 @@
   (event (make-mode-message-all-notes-off) :type event-union))
 
 (defbinstruct (track (:endian :big)) ()
+  ($track-start 0 :type position)
   (nil #.(coerce "MTrk" 'simple-base-string) :type (satisfies (simple-base-string 4)))
-  (len-events 0 :type (unsigned-byte 32))
-  (track-end 0 :type (map position (curry #'+ len-events)))
-  (events (make-array 0 :element-type 'track-event) :type (simple-array (track-event track-end) (*))))
+  (%len-events 0 :type (values (pointer (unsigned-byte 32) (map (unsigned-byte 32) (constantly 4) (constantly (max (- $track-end $track-start 4 4) 0))) $track-start)))
+  (%track-end 0 :type (map position (curry #'+ %len-events)))
+  (events (make-array 0 :element-type 'track-event) :type (simple-array (track-event %track-end) (*)))
+  ($track-end 0 :type position))
 
 (defbinstruct (header (:endian :big)) ()
   (nil #.(coerce "MThd" 'simple-base-string) :type (satisfies (simple-base-string 4)))
