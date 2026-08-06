@@ -1,10 +1,10 @@
 (defpackage cl-smf
   (:use #:cl #:alexandria #:binstruct)
-  (:shadow #:copy-file)
+  (:shadow #:read #:write #:copy-file)
   (:nicknames #:smf)
   (:export
-   #:read-file
-   #:write-file))
+   #:read
+   #:write))
 
 (in-package #:smf)
 
@@ -399,3 +399,23 @@
   (tracks (make-array 0 :element-type 'track) :type (simple-array track ((header-num-tracks header)))))
 
 (defbinio (file &aux (*running-status* 0)) stream)
+
+(defgeneric read (input)
+  (:method ((stream stream))
+    (read-file stream))
+  (:method ((vector vector))
+    (read (flex:make-in-memory-input-stream vector)))
+  (:method ((pathname pathname))
+    (with-open-file (stream pathname :direction :input :element-type '(unsigned-byte 8))
+      (read pathname))))
+
+(defgeneric write (output object)
+  (:method ((object file) (stream stream))
+    (write-file stream object))
+  (:method ((object file) (null null))
+    (let ((stream (flex:make-in-memory-output-stream)))
+      (write object stream)
+      (flex:get-output-stream-sequence stream)))
+  (:method ((object file) (pathname pathname))
+    (with-open-file (stream pathname :direction :output :element-type '(unsigned-byte 8))
+      (write object stream))))

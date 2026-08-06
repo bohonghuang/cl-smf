@@ -3,7 +3,7 @@
   :maintainer "Bohong Huang <bohonghuang@qq.com>"
   :license "Apache-2.0"
   :description "Standard MIDI File (SMF) reader/writer for Common Lisp."
-  :depends-on (#:binstruct #:closer-mop)
+  :depends-on (#:binstruct #:closer-mop #:flexi-streams)
   :serial t
   :components ((:file "package"))
   :in-order-to ((test-op (test-op #:cl-smf/test))))
