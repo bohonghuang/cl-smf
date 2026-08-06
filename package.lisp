@@ -43,16 +43,20 @@
   (ldb (byte 4 0) (setf *smf-running-status* status)))
 
 (defmacro define-smf-channel-event ((name status) &body fields)
-  (let ((struct-name (symbolicate '#:smf-event- name))
-        (status-channel 'smf-status-channel)
-        (channel-status (symbolicate 'smf-channel-status '/ name)))
+  (let* ((struct (symbolicate '#:smf-event- name))
+         (struct-status (symbolicate struct '#:/status))
+         (status-channel 'smf-status-channel)
+         (channel-status (symbolicate 'smf-channel-status '/ name)))
     `(progn
        (defun ,channel-status (channel)
          (dpb channel (byte 4 0) ,status))
-       (defbinstruct (,struct-name (:include smf-channel-event) (:endian :big)) ()
-         (channel 0 :type (map (or ,@(loop :for i :from #x00 :to #x0F
-                                           :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i))))
-                                   (smf-running-status ,status))
+       (defbinstruct (,struct-status (:type (unsigned-byte 8)) (:constructor progn) (:conc-name nil)) ()
+         (values ,status :type ,(if fields
+                                    `(or . ,(loop :for i :from #x00 :to #x0F
+                                                  :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i)))))
+                                    `(satisfies (unsigned-byte 8) ,(with-gensyms (byte) `(lambda (,byte) (<= ,(+ status #x00) ,byte  ,(+ status #x0F))))))))
+       (defbinstruct (,struct (:include smf-channel-event) (:endian :big)) ()
+         (channel 0 :type (map (or (,struct-status) (smf-running-status ,status))
                                (the (function ((unsigned-byte 8)) (unsigned-byte 4)) #',status-channel)
                                (the (function ((unsigned-byte 4)) (unsigned-byte 8)) #',channel-status)))
          . ,fields))))
@@ -80,7 +84,7 @@
       (let ((type `(or . ,(loop :for status :in status-list
                                 :collect `(satisfies (unsigned-byte 8) (curry #'eql ,status)))))
             (fields (or fields '((nil 0 :type (unsigned-byte 8))))))
-        `(defbinstruct (,struct (:include smf-event-control-change)) ()
+        `(defbinstruct (,struct (:include smf-event-control-change) (:endian :big)) ()
            (,status-field 0 :type (map ,type (the (function ((unsigned-byte 8)) (unsigned-byte 8)) ,reader) ,writer))
            ,@fields)))))
 
