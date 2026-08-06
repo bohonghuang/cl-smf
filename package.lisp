@@ -88,43 +88,43 @@
            (,status-field 0 :type (map ,type (the (function ((unsigned-byte 8)) (unsigned-byte 8)) ,reader) ,writer))
            ,@fields)))))
 
-(define-smf-control-event (bank-select #x00)
+(define-smf-control-event (bank-select/msb #x00)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (modulation-wheel #x01)
+(define-smf-control-event (modulation-wheel/msb #x01)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (breath-controller #x02)
+(define-smf-control-event (breath-controller/msb #x02)
   (value 0 :type (unsigned-byte 8)))
 
 ;; #x03 undefined
 
-(define-smf-control-event (foot-pedal #x04)
+(define-smf-control-event (foot-pedal/msb #x04)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (portamento-time #x05)
+(define-smf-control-event (portamento-time/msb #x05)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (data-entry #x06)
+(define-smf-control-event (data-entry/msb #x06)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (volume #x07)
+(define-smf-control-event (volume/msb #x07)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (balance #x08)
+(define-smf-control-event (balance/msb #x08)
   (value 0 :type (unsigned-byte 8)))
 
 ;; #x09 undefined
 
-(define-smf-control-event (pan #x0A)
+(define-smf-control-event (pan/msb #x0A)
   (value 0 :type (signed-byte 7))
   (nil 0 :type (satisfies bit)))
 
-(define-smf-control-event (expression #x0B)
+(define-smf-control-event (expression/msb #x0B)
   (value 0 :type (unsigned-byte 8)))
 
 (define-smf-control-event
-    (effect-controller
+    (effect-controller/msb
      ((id (lambda (status)
             (ecase status
               (#x0C 1)
@@ -141,7 +141,7 @@
   (value 0 :type (unsigned-byte 8)))
 
 (define-smf-control-event
-    (general-purpose
+    (general-purpose/msb
      ((id (lambda (status)
             (ecase status
               (#x10 1)
@@ -186,8 +186,7 @@
 ;; #x29 undefined
 
 (define-smf-control-event (pan/lsb #x2A)
-  (value 0 :type (signed-byte 7))
-  (nil 0 :type (satisfies bit)))
+  (value 0 :type (unsigned-byte 8)))
 
 (define-smf-control-event (expression/lsb #x2B)
   (value 0 :type (unsigned-byte 8)))
@@ -263,16 +262,16 @@
 (define-smf-control-event (data-decrement #x61)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (nrpn-lsb #x62)
+(define-smf-control-event (nrpn/lsb #x62)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (nrpn-msb #x63)
+(define-smf-control-event (nrpn/msb #x63)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (rpn-lsb #x64)
+(define-smf-control-event (rpn/lsb #x64)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (rpn-msb #x65)
+(define-smf-control-event (rpn/msb #x65)
   (value 0 :type (unsigned-byte 8)))
 
 ;; #x66--#x77 undefined
