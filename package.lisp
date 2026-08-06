@@ -1,5 +1,6 @@
 (defpackage cl-smf
   (:use #:cl #:alexandria #:binstruct)
+  (:shadow #:copy-file)
   (:nicknames #:smf)
   (:export
    #:read-smf
@@ -7,11 +8,11 @@
 
 (in-package #:smf)
 
-(defbinstruct smf-event ())
+(defbinstruct event ())
 
-(defmacro define-smf-event ((name status) &body fields)
+(defmacro define-event ((name status) &body fields)
   (destructuring-bind (name &rest options) (ensure-list name)
-    (let ((name (alexandria:symbolicate '#:smf-event- name)))
+    (let ((name (alexandria:symbolicate '#:event- name)))
       `(defbinstruct (,name (:endian :big) . ,options) ()
          (nil ,status :type (satisfies (unsigned-byte 8) (curry #'eql ,status)))
          . ,fields))))
@@ -20,14 +21,14 @@
 ;; Running status ;;
 ;;;;;;;;;;;;;;;;;;;;
 
-(declaim (type (unsigned-byte 8) *smf-running-status*))
-(defvar *smf-running-status*)
+(declaim (type (unsigned-byte 8) *running-status*))
+(defvar *running-status*)
 
-(defbinstruct (smf-running-status (:type (unsigned-byte 8)) (:constructor progn) (:conc-name nil)) (expected)
+(defbinstruct (running-status (:type (unsigned-byte 8)) (:constructor progn) (:conc-name nil)) (expected)
   (values 0 :type (satisfies
                    (map (binstruct::peek (unsigned-byte 8))
                         (the (function (t) (unsigned-byte 8))
-                             (lambda (byte) (if (< byte #x80) *smf-running-status* 0)))
+                             (lambda (byte) (if (< byte #x80) *running-status* 0)))
                         (constantly 0))
                    (lambda (status) (= (ldb (byte 4 4) status) (ldb (byte 4 4) (the (unsigned-byte 8) expected)))))))
 
@@ -35,18 +36,18 @@
 ;; Channel events ;;
 ;;;;;;;;;;;;;;;;;;;;
 
-(defbinstruct (smf-channel-event (:include smf-event)) ())
+(defbinstruct (channel-event (:include event)) ())
 
-(declaim (ftype (function ((unsigned-byte 8)) (values (unsigned-byte 4))) smf-status-channel))
-(defun smf-status-channel (status)
+(declaim (ftype (function ((unsigned-byte 8)) (values (unsigned-byte 4))) status-channel))
+(defun status-channel (status)
   (assert (ldb (byte 4 4) status))
-  (ldb (byte 4 0) (setf *smf-running-status* status)))
+  (ldb (byte 4 0) (setf *running-status* status)))
 
-(defmacro define-smf-channel-event ((name status) &body fields)
-  (let* ((struct (symbolicate '#:smf-event- name))
+(defmacro define-channel-event ((name status) &body fields)
+  (let* ((struct (symbolicate '#:event- name))
          (struct-status (symbolicate struct '#:/status))
-         (status-channel 'smf-status-channel)
-         (channel-status (symbolicate 'smf-channel-status '/ name)))
+         (status-channel 'status-channel)
+         (channel-status (symbolicate 'channel-status '/ name)))
     `(progn
        (defun ,channel-status (channel)
          (dpb channel (byte 4 0) ,status))
@@ -55,28 +56,28 @@
                                     `(or . ,(loop :for i :from #x00 :to #x0F
                                                   :collect `(satisfies (unsigned-byte 8) (curry #'eql ,(+ status i)))))
                                     `(satisfies (unsigned-byte 8) ,(with-gensyms (byte) `(lambda (,byte) (<= ,(+ status #x00) ,byte  ,(+ status #x0F))))))))
-       (defbinstruct (,struct (:include smf-channel-event) (:endian :big)) ()
-         (channel 0 :type (map (or (,struct-status) (smf-running-status ,status))
+       (defbinstruct (,struct (:include channel-event) (:endian :big)) ()
+         (channel 0 :type (map (or (,struct-status) (running-status ,status))
                                (the (function ((unsigned-byte 8)) (unsigned-byte 4)) #',status-channel)
                                (the (function ((unsigned-byte 4)) (unsigned-byte 8)) #',channel-status)))
          . ,fields))))
 
-(define-smf-channel-event (note-off #x80)
+(define-channel-event (note-off #x80)
   (note 0 :type (unsigned-byte 8))
   (velocity 0 :type (unsigned-byte 8)))
 
-(define-smf-channel-event (note-on #x90)
+(define-channel-event (note-on #x90)
   (note 0 :type (unsigned-byte 8))
   (velocity 0 :type (unsigned-byte 8)))
 
-(define-smf-channel-event (poly-pressure #xA0)
+(define-channel-event (poly-pressure #xA0)
   (note 0 :type (unsigned-byte 8))
   (pressure 0 :type (unsigned-byte 8)))
 
-(define-smf-channel-event (control-change #xB0))
+(define-channel-event (control-change #xB0))
 
-(defmacro define-smf-control-event ((name status) &body fields)
-  (let* ((struct (if (stringp name) (intern name) (symbolicate '#:smf-control-event- name)))
+(defmacro define-control-event ((name status) &body fields)
+  (let* ((struct (if (stringp name) (intern name) (symbolicate '#:control-event- name)))
          (status-list (ensure-list status)))
     (destructuring-bind (&optional status-field (reader '#'identity) (writer '#'identity))
         (ensure-list (typecase (car status-list)
@@ -84,49 +85,49 @@
       (let ((type `(or . ,(loop :for status :in status-list
                                 :collect `(satisfies (unsigned-byte 8) (curry #'eql ,status)))))
             (fields (or fields '((nil 0 :type (unsigned-byte 8))))))
-        `(defbinstruct (,struct (:include smf-event-control-change) (:endian :big)) ()
+        `(defbinstruct (,struct (:include event-control-change) (:endian :big)) ()
            (,status-field 0 :type (map ,type (the (function ((unsigned-byte 8)) (unsigned-byte 8)) ,reader) ,writer))
            ,@fields)))))
 
-(defmacro define-smf-mode-message ((name status) &body fields)
-  `(define-smf-control-event (,(format nil "~A~A" '#:smf-mode-message- name) ,status) . ,fields))
+(defmacro define-mode-message ((name status) &body fields)
+  `(define-control-event (,(format nil "~A~A" '#:mode-message- name) ,status) . ,fields))
 
-(define-smf-control-event (bank-select/msb #x00)
+(define-control-event (bank-select/msb #x00)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (modulation-wheel/msb #x01)
+(define-control-event (modulation-wheel/msb #x01)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (breath-controller/msb #x02)
+(define-control-event (breath-controller/msb #x02)
   (value 0 :type (unsigned-byte 8)))
 
 ;; #x03 undefined
 
-(define-smf-control-event (foot-pedal/msb #x04)
+(define-control-event (foot-pedal/msb #x04)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (portamento-time/msb #x05)
+(define-control-event (portamento-time/msb #x05)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (data-entry/msb #x06)
+(define-control-event (data-entry/msb #x06)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (volume/msb #x07)
+(define-control-event (volume/msb #x07)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (balance/msb #x08)
+(define-control-event (balance/msb #x08)
   (value 0 :type (unsigned-byte 8)))
 
 ;; #x09 undefined
 
-(define-smf-control-event (pan/msb #x0A)
+(define-control-event (pan/msb #x0A)
   (value 0 :type (signed-byte 7))
   (nil 0 :type (satisfies bit)))
 
-(define-smf-control-event (expression/msb #x0B)
+(define-control-event (expression/msb #x0B)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event
+(define-control-event
     (effect-controller/msb
      ((id (lambda (status)
             (ecase status
@@ -143,7 +144,7 @@
       #x0C #x0D #x2C #x2D))
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event
+(define-control-event
     (general-purpose/msb
      ((id (lambda (status)
             (ecase status
@@ -160,41 +161,41 @@
       #x10 #x11 #x12 #x13))
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (bank-select/lsb #x20)
+(define-control-event (bank-select/lsb #x20)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (modulation-wheel/lsb #x21)
+(define-control-event (modulation-wheel/lsb #x21)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (breath-controller/lsb #x22)
+(define-control-event (breath-controller/lsb #x22)
   (value 0 :type (unsigned-byte 8)))
 
 ;; #x23 undefined
 
-(define-smf-control-event (foot-pedal/lsb #x24)
+(define-control-event (foot-pedal/lsb #x24)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (portamento-time/lsb #x25)
+(define-control-event (portamento-time/lsb #x25)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (data-entry/lsb #x26)
+(define-control-event (data-entry/lsb #x26)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (volume/lsb #x27)
+(define-control-event (volume/lsb #x27)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (balance/lsb #x28)
+(define-control-event (balance/lsb #x28)
   (value 0 :type (unsigned-byte 8)))
 
 ;; #x29 undefined
 
-(define-smf-control-event (pan/lsb #x2A)
+(define-control-event (pan/lsb #x2A)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (expression/lsb #x2B)
+(define-control-event (expression/lsb #x2B)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event
+(define-control-event
     (effect-controller/lsb
      ((id (lambda (status)
             (ecase status
@@ -211,7 +212,7 @@
       #x2C #x2D #x4C #x4D))
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event
+(define-control-event
     (general-purpose/lsb
      ((id (lambda (status)
             (ecase status
@@ -228,19 +229,19 @@
       #x30 #x31 #x32 #x33))
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (sound-controller
-                           ((id (lambda (status)
-                                  (ecase status
-                                    (#x46 1) (#x47 2) (#x48 3) (#x49 4) (#x4A 5)
-                                    (#x4B 6) (#x4C 7) (#x4D 8) (#x4E 9) (#x4F 10)))
-                                (lambda (id)
-                                  (ecase id
-                                    (1 #x46) (2 #x47) (3 #x48) (4 #x49) (5 #x4A)
-                                    (6 #x4B) (7 #x4C) (8 #x4D) (9 #x4E) (10 #x4F))))
-                            #x46 #x47 #x48 #x49 #x4A #x4B #x4C #x4D #x4E #x4F))
+(define-control-event (sound-controller
+                       ((id (lambda (status)
+                              (ecase status
+                                (#x46 1) (#x47 2) (#x48 3) (#x49 4) (#x4A 5)
+                                (#x4B 6) (#x4C 7) (#x4D 8) (#x4E 9) (#x4F 10)))
+                            (lambda (id)
+                              (ecase id
+                                (1 #x46) (2 #x47) (3 #x48) (4 #x49) (5 #x4A)
+                                (6 #x4B) (7 #x4C) (8 #x4D) (9 #x4E) (10 #x4F))))
+                        #x46 #x47 #x48 #x49 #x4A #x4B #x4C #x4D #x4E #x4F))
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event
+(define-control-event
     (effect-depth
      ((id (lambda (status)
             (ecase status
@@ -259,73 +260,73 @@
       #x5B #x5C #x5D #x5E #x5F))
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (data-increment #x60)
+(define-control-event (data-increment #x60)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (data-decrement #x61)
+(define-control-event (data-decrement #x61)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (nrpn/lsb #x62)
+(define-control-event (nrpn/lsb #x62)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (nrpn/msb #x63)
+(define-control-event (nrpn/msb #x63)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (rpn/lsb #x64)
+(define-control-event (rpn/lsb #x64)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-control-event (rpn/msb #x65)
+(define-control-event (rpn/msb #x65)
   (value 0 :type (unsigned-byte 8)))
 
 ;; #x66--#x77 undefined
 
-(define-smf-mode-message (all-sound-off #x78))
+(define-mode-message (all-sound-off #x78))
 
-(define-smf-mode-message (reset-all-controllers #x79))
+(define-mode-message (reset-all-controllers #x79))
 
-(define-smf-mode-message (local-on-off #x7A)
+(define-mode-message (local-on-off #x7A)
   (switch 0 :type (boolean (unsigned-byte 8))))
 
-(define-smf-mode-message (all-notes-off #x7B))
+(define-mode-message (all-notes-off #x7B))
 
-(define-smf-mode-message (omni-mode-off #x7C))
+(define-mode-message (omni-mode-off #x7C))
 
-(define-smf-mode-message (omni-mode-on #x7D))
+(define-mode-message (omni-mode-on #x7D))
 
-(define-smf-mode-message (mono-mode #x7E)
+(define-mode-message (mono-mode #x7E)
   (value 0 :type (unsigned-byte 8)))
 
-(define-smf-mode-message (poly-mode #x7F))
+(define-mode-message (poly-mode #x7F))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; System common messages ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-smf-event (timing-code #xF1)
+(define-event (timing-code #xF1)
   (code 0 :type (unsigned-byte 8)))
 
-(define-smf-event (song-position-pointer #xF2)
+(define-event (song-position-pointer #xF2)
   (lsb 0 :type (unsigned-byte 8))
   (msb 0 :type (unsigned-byte 8)))
 
-(define-smf-event (song-select #xF3)
+(define-event (song-select #xF3)
   (song 0 :type (unsigned-byte 8)))
 
-(define-smf-event (tune-request #xF6))
+(define-event (tune-request #xF6))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; System real-time messages ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-smf-event (timing-clock #xF8))
+(define-event (timing-clock #xF8))
 
-(define-smf-event (start-sequence #xFA))
+(define-event (start-sequence #xFA))
 
-(define-smf-event (continue-sequence #xFB))
+(define-event (continue-sequence #xFB))
 
-(define-smf-event (stop-sequence #xFC))
+(define-event (stop-sequence #xFC))
 
-(define-smf-event (active-sensing #xFE))
+(define-event (active-sensing #xFE))
 
 ;;;;;;;;;
 ;; VLQ ;;
@@ -360,11 +361,11 @@
 ;; SysEx events ;;
 ;;;;;;;;;;;;;;;;;;
 
-(define-smf-event (sysex #xF0)
+(define-event (sysex #xF0)
   (len 0 :type vlq)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
-(define-smf-event (authorization-sysex #xF7)
+(define-event (authorization-sysex #xF7)
   (len 0 :type vlq)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
@@ -372,102 +373,102 @@
 ;; Meta events ;;
 ;;;;;;;;;;;;;;;;;
 
-(defbinstruct (smf-meta-event (:include smf-event) (:endian :big)) ()
+(defbinstruct (meta-event (:include event) (:endian :big)) ()
   (nil #xFF :type (satisfies (unsigned-byte 8) (curry #'eql #xFF))))
 
-(defmacro define-smf-meta-event ((name status) &body fields)
-  `(define-smf-event ((,name (:include smf-meta-event)) ,status)
+(defmacro define-meta-event ((name status) &body fields)
+  `(define-event ((,name (:include meta-event)) ,status)
      (len 0 :type vlq)
      ,@fields))
 
-(define-smf-meta-event (sequence-number #x00)
+(define-meta-event (sequence-number #x00)
   (ssss 0 :type (unsigned-byte 16)))
 
-(define-smf-meta-event (text #x01)
+(define-meta-event (text #x01)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (copyright #x02)
+(define-meta-event (copyright #x02)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (sequence-track-name #x03)
+(define-meta-event (sequence-track-name #x03)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (instrument-name #x04)
+(define-meta-event (instrument-name #x04)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (lyric #x05)
+(define-meta-event (lyric #x05)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (marker #x06)
+(define-meta-event (marker #x06)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (cue-point #x07)
+(define-meta-event (cue-point #x07)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (program-name #x08)
+(define-meta-event (program-name #x08)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (device-name #x09)
+(define-meta-event (device-name #x09)
   (text "" :type (simple-base-string len)))
 
-(define-smf-meta-event (channel-prefix #x20)
+(define-meta-event (channel-prefix #x20)
   (cc 0 :type (unsigned-byte 8)))
 
-(define-smf-meta-event (end-of-track #x2F))
+(define-meta-event (end-of-track #x2F))
 
-(define-smf-meta-event (tempo #x51)
+(define-meta-event (tempo #x51)
   (tttttt 0 :type (unsigned-byte 24)))
 
-(define-smf-meta-event (smpte-offset #x54)
+(define-meta-event (smpte-offset #x54)
   (hr 0 :type (unsigned-byte 8))
   (mn 0 :type (unsigned-byte 8))
   (se 0 :type (unsigned-byte 8))
   (fr 0 :type (unsigned-byte 8))
   (ff 0 :type (unsigned-byte 8)))
 
-(define-smf-meta-event (time-signature #x58)
+(define-meta-event (time-signature #x58)
   (nn 0 :type (unsigned-byte 8))
   (dd 0 :type (unsigned-byte 8))
   (cc 0 :type (unsigned-byte 8))
   (bb 0 :type (unsigned-byte 8)))
 
-(define-smf-meta-event (key-signature #x59)
+(define-meta-event (key-signature #x59)
   (sf 0 :type (signed-byte 8))
   (mi 0 :type (unsigned-byte 8)))
 
-(define-smf-meta-event (sequencer-specific #x7F)
+(define-meta-event (sequencer-specific #x7F)
   (data (make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (len))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun smf-event-classes (&optional (class (find-class 'smf-event)))
+  (defun event-classes (&optional (class (find-class 'event)))
     (or (loop :for class :in (c2mop:class-direct-subclasses class)
-              :nconc (smf-event-classes class))
+              :nconc (event-classes class))
         (list class))))
 
 ;;;;;;;;;;;;;;;;
 ;; Containers ;;
 ;;;;;;;;;;;;;;;;
 
-(defbinstruct (smf-track-event (:endian :big)) (end)
+(defbinstruct (track-event (:endian :big)) (end)
   (nil 0 :type (satisfies position (rcurry #'< end)))
   (delta 0 :type vlq)
-  (event (make-smf-control-event-all-notes-off) :type (or . #.(mapcar #'class-name (smf-event-classes)))))
+  (event (make-mode-message-all-notes-off) :type (or . #.(mapcar #'class-name (event-classes)))))
 
-(defbinstruct (smf-track (:endian :big)) ()
+(defbinstruct (track (:endian :big)) ()
   (nil #.(coerce "MTrk" 'simple-base-string) :type (satisfies (simple-base-string 4)))
   (len-events 0 :type (unsigned-byte 32))
   (track-end 0 :type (map position (curry #'+ len-events)))
-  (events (make-array 0 :element-type 'smf-track-event) :type (simple-array (smf-track-event track-end) (*))))
+  (events (make-array 0 :element-type 'track-event) :type (simple-array (track-event track-end) (*))))
 
-(defbinstruct (smf-header (:endian :big)) ()
+(defbinstruct (header (:endian :big)) ()
   (nil #.(coerce "MThd" 'simple-base-string) :type (satisfies (simple-base-string 4)))
   (nil 6 :type (unsigned-byte 32))
   (format 0 :type (unsigned-byte 16))
   (num-tracks 0 :type (unsigned-byte 16))
   (division 0 :type (signed-byte 16)))
 
-(defbinstruct (smf (:endian :big)) ()
-  (header (make-smf-header) :type smf-header)
-  (tracks (make-array 0 :element-type 'smf-track) :type (simple-array smf-track ((smf-header-num-tracks header)))))
+(defbinstruct (file (:endian :big)) ()
+  (header (make-header) :type header)
+  (tracks (make-array 0 :element-type 'track) :type (simple-array track ((header-num-tracks header)))))
 
-(defbinio (smf &aux (*smf-running-status* 0)) stream)
+(defbinio (file &aux (*running-status* 0)) stream)
