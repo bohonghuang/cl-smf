@@ -1,12 +1,23 @@
 (defpackage cl-smf
   (:use #:cl #:alexandria #:binstruct)
-  (:shadow #:read #:write #:copy-file)
+  (:shadow #:read #:write #:copy-file #:switch)
   (:nicknames #:smf)
   (:export
    #:read
    #:write))
 
 (in-package #:smf)
+
+(defmacro defbinalias (name-and-options lambda-list parser)
+  (destructuring-bind (name &rest options) (ensure-list name-and-options)
+    (destructuring-bind (&key (type name typep)) (mappend #'identity options)
+      (unless typep
+        (let ((inferred-type (binstruct::lisp-type parser)))
+          (unless (eq inferred-type t)
+            (setf type inferred-type))))
+      `(defbinstruct (,name (:type ,type) (:constructor progn) (:conc-name nil))
+         ,lambda-list
+         (values nil :type ,parser)))))
 
 (defbinstruct event ())
 
@@ -24,13 +35,13 @@
 (declaim (type (unsigned-byte 8) *running-status*))
 (defvar *running-status*)
 
-(defbinstruct (running-status (:type (unsigned-byte 8)) (:constructor progn) (:conc-name nil)) (expected)
-  (values 0 :type (satisfies
-                   (map (binstruct::peek (unsigned-byte 8))
-                        (the (function (t) (unsigned-byte 8))
-                             (lambda (byte) (if (< byte #x80) *running-status* 0)))
-                        (constantly 0))
-                   (lambda (status) (= (ldb (byte 4 4) status) (ldb (byte 4 4) (the (unsigned-byte 8) expected)))))))
+(defbinalias (running-status (:type (unsigned-byte 8))) (expected)
+  (satisfies
+   (map (binstruct::peek (unsigned-byte 8))
+        (the (function (t) (unsigned-byte 8))
+             (lambda (byte) (if (< byte #x80) *running-status* 0)))
+        (constantly 0))
+   (lambda (status) (= (ldb (byte 4 4) status) (ldb (byte 4 4) (the (unsigned-byte 8) expected))))))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; Channel events ;;
@@ -75,6 +86,16 @@
   (pressure 0 :type (unsigned-byte 8)))
 
 (define-channel-event (control-change #xB0))
+
+(define-channel-event (program-change #xC0)
+  (program 0 :type (unsigned-byte 8)))
+
+(define-channel-event (channel-pressure #xD0)
+  (pressure 0 :type (unsigned-byte 8)))
+
+(define-channel-event (pitch-bend #xE0)
+  (lsb 0 :type (unsigned-byte 8))
+  (msb 0 :type (unsigned-byte 8)))
 
 (defmacro define-control-event ((name status) &body fields)
   (let* ((struct (if (stringp name) (intern name) (symbolicate '#:control-event- name)))
@@ -181,7 +202,37 @@
 (define-control-event (general-purpose/lsb (#x30 #x31 #x32 #x33))
   (value 0 :type (unsigned-byte 8)))
 
+(defbinalias (switch (:type boolean)) ()
+  (map (unsigned-byte 8) (lambda (byte) (>= byte #x40)) (lambda (boolean) (if boolean #x7F #x00))))
+
+(define-control-event (damper-pedal #x40)
+  (value 0 :type switch))
+
+(define-control-event (portamento-on-off #x41)
+  (value 0 :type switch))
+
+(define-control-event (sostenuto #x42)
+  (value 0 :type switch))
+
+(define-control-event (soft-pedal #x43)
+  (value 0 :type switch))
+
+(define-control-event (legato-footswitch #x44)
+  (value 0 :type switch))
+
+(define-control-event (hold-2 #x45)
+  (value 0 :type switch))
+
 (define-control-event (sound-controller (#x46 #x47 #x48 #x49 #x4A #x4B #x4C #x4D #x4E #x4F))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-control-event (general-purpose-switch (#x50 #x51 #x52 #x53))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-control-event (portamento-control #x54)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-control-event (high-resolution-velocity-prefix #x58)
   (value 0 :type (unsigned-byte 8)))
 
 (define-control-event (effect-depth (#x5B #x5C #x5D #x5E #x5F))
@@ -281,8 +332,8 @@
         :finally (return (make-%vlq :bytes (coerce (nreverse bytes) '(simple-array (unsigned-byte 8) (*)))
                                     :byte (ldb (byte 7 0) value)))))
 
-(defbinstruct (vlq (:type (unsigned-byte 64)) (:constructor progn) (:conc-name nil)) ()
-  (values 0 :type (map %vlq #'%vlq-integer #'integer-%vlq)))
+(defbinalias (vlq (:type (unsigned-byte 64))) ()
+  (map %vlq #'%vlq-integer #'integer-%vlq))
 
 ;;;;;;;;;;;;;;;;;;
 ;; SysEx events ;;
@@ -372,6 +423,9 @@
               :nconc (event-classes class))
         (list class))))
 
+(defbinalias (event-union (:type event)) ()
+  (or . #.(mapcar #'class-name (event-classes))))
+
 ;;;;;;;;;;;;;;;;
 ;; Containers ;;
 ;;;;;;;;;;;;;;;;
@@ -379,7 +433,7 @@
 (defbinstruct (track-event (:endian :big)) (end)
   (nil 0 :type (satisfies position (rcurry #'< end)))
   (delta 0 :type vlq)
-  (event (make-mode-message-all-notes-off) :type (or . #.(mapcar #'class-name (event-classes)))))
+  (event (make-mode-message-all-notes-off) :type event-union))
 
 (defbinstruct (track (:endian :big)) ()
   (nil #.(coerce "MTrk" 'simple-base-string) :type (satisfies (simple-base-string 4)))
@@ -407,7 +461,7 @@
     (read (flex:make-in-memory-input-stream vector)))
   (:method ((pathname pathname))
     (with-open-file (stream pathname :direction :input :element-type '(unsigned-byte 8))
-      (read pathname))))
+      (read stream))))
 
 (defgeneric write (output object)
   (:method ((object file) (stream stream))
