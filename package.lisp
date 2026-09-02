@@ -465,7 +465,7 @@
     (with-open-file (stream pathname :direction :input :element-type '(unsigned-byte 8))
       (read stream))))
 
-(defgeneric write (output object)
+(defgeneric write (object output)
   (:method ((object file) (stream stream))
     (write-file stream object))
   (:method ((object file) (null null))
